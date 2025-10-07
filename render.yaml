@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: linkedin-bot-web
+    env: docker
+    dockerfilePath: ./Dockerfile
+    region: oregon
+    plan: starter
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_REDIRECT_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /app/data/linkedin_bot.db
+      - key: DAILY_POST_TIME
+        value: "09:00"
+    healthCheckPath: /health
+    
+  - type: worker
+    name: linkedin-bot-worker
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python scheduler.py
+    region: oregon
+    plan: starter
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: LINKEDIN_CLIENT_ID
+        sync: false
+      - key: LINKEDIN_CLIENT_SECRET
+        sync: false
+      - key: LINKEDIN_REDIRECT_URI
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_PATH
+        value: /app/data/linkedin_bot.db
+      - key: DAILY_POST_TIME
+        value: "09:00"
