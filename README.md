@@ -189,6 +189,18 @@ docker compose logs -f web
 
 MIT
 
+## Testing
+
+Run the installation test to verify everything is working:
+
+```bash
+python3 test_installation.py
+```
+
+Expected output: All 6 tests should pass.
+
+See [VERIFICATION.md](VERIFICATION.md) for detailed implementation verification and acceptance criteria.
+
 ## Contributing
 
 PRs welcome! Please test in DRY_RUN mode first.
