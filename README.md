@@ -48,6 +48,41 @@ The bot consists of two separate services:
 
 Both services share the same SQLite database for state management.
 
+## Quick Start
+
+### Using Docker Compose (Recommended for Local Development)
+
+```bash
+# Clone the repository
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+
+# Create .env file
+cp .env.example .env
+# Edit .env with your credentials
+
+# Start both services
+docker-compose up
+
+# Visit http://localhost:5000
+```
+
+### Using Start Scripts
+
+**Linux/Mac:**
+```bash
+./start.sh
+```
+
+**Windows:**
+```bash
+start.bat
+```
+
+### Manual Setup
+
+See the detailed [Setup](#setup) section below.
+
 ## Setup
 
 ### Prerequisites
@@ -183,6 +218,36 @@ Perfect for monitoring on Render's log dashboard.
 
 ## Development
 
+### Admin CLI
+
+The bot includes an admin CLI for management tasks:
+
+```bash
+# Show statistics
+python admin.py stats
+
+# View engagement queue
+python admin.py queue
+
+# Add a target to engagement queue
+python admin.py add-target https://linkedin.com/post/xyz
+
+# Add and approve immediately
+python admin.py add-target https://linkedin.com/post/xyz --approve
+
+# Test news fetching
+python admin.py test-news
+
+# Test news fetching and generate post
+python admin.py test-news --generate
+
+# Run daily pipeline manually
+python admin.py run-daily
+
+# Initialize database
+python admin.py init-db
+```
+
 ### Project Structure
 ```
 linkedinAgent/
@@ -193,10 +258,18 @@ linkedinAgent/
 ├── linkedin_api.py        # LinkedIn API integration
 ├── content_generator.py   # Gemini content generation
 ├── news_fetcher.py        # News RSS feed fetcher
+├── admin.py               # Admin CLI tool
+├── test_setup.py          # Setup verification script
 ├── requirements.txt       # Python dependencies
 ├── Dockerfile            # Docker configuration
+├── docker-compose.yml    # Docker Compose for local development
 ├── render.yaml           # Render blueprint
+├── start.sh              # Linux/Mac startup script
+├── start.bat             # Windows startup script
 ├── .env.example          # Environment variables template
+├── .github/
+│   └── workflows/
+│       └── ci.yml        # GitHub Actions CI
 └── README.md             # This file
 ```
 
