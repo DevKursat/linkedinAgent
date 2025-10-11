@@ -19,6 +19,10 @@ class LinkedInAPI:
         self.scopes = config.LINKEDIN_SCOPES.split()
         self._me_cache: Optional[Dict[str, Any]] = None
         self._rest_backoff_until: float = 0.0
+        self._rest_disabled_reason: Optional[str] = None
+        self._rest_enabled_config: bool = config.LINKEDIN_ENABLE_REST
+        if not self._rest_enabled_config:
+            self._rest_disabled_reason = "Disabled via configuration"
 
     @staticmethod
     def _normalize_version(version: str) -> Optional[str]:
@@ -45,6 +49,28 @@ class LinkedInAPI:
         if not versions:
             versions.append("202405")
         return versions
+
+    def _rest_allowed(self) -> bool:
+        return (
+            self._rest_enabled_config
+            and self._rest_disabled_reason is None
+            and time.time() >= self._rest_backoff_until
+        )
+
+    def _disable_rest(self, reason: str) -> None:
+        if self._rest_disabled_reason == "Disabled via configuration":
+            return
+        if self._rest_disabled_reason:
+            return
+        self._rest_disabled_reason = reason
+        self._rest_backoff_until = float("inf")
+        print(f"LinkedIn REST disabled: {reason}")
+
+    def _mark_rest_success(self) -> None:
+        if not self._rest_enabled_config:
+            return
+        self._rest_disabled_reason = None
+        self._rest_backoff_until = 0.0
 
     def _extract_versions_from_error(self, error_text: str) -> List[str]:
         """Extract possible version strings from LinkedIn 426 error messages."""
@@ -184,10 +210,7 @@ class LinkedInAPI:
         }
         
         # Try new v3 REST API first with version fallbacks
-        if time.time() < self._rest_backoff_until:
-            versions_to_try: List[str] = []
-        else:
-            versions_to_try = self._rest_versions()
+        versions_to_try: List[str] = self._rest_versions() if self._rest_allowed() else []
         tried_versions: List[str] = []
         while versions_to_try:
             version = versions_to_try.pop(0)
@@ -210,15 +233,18 @@ class LinkedInAPI:
                         else:
                             urn = f"urn:li:share:{post_id}"
                         
-                        self._rest_backoff_until = 0.0
+                        self._mark_rest_success()
                         return {"id": post_id, "urn": urn}
             except httpx.HTTPStatusError as e:
                 print(f"API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
                 if e.response.status_code == 426:
-                    self._rest_backoff_until = time.time() + 3600
-                    for candidate_version in self._extract_versions_from_error(e.response.text):
-                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
-                            versions_to_try.append(candidate_version)
+                    if self._rest_enabled_config:
+                        self._disable_rest(f"LinkedIn returned 426 for version {version}")
+                        versions_to_try = []
+                    if self._rest_disabled_reason is None:
+                        for candidate_version in self._extract_versions_from_error(e.response.text):
+                            if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                                versions_to_try.append(candidate_version)
                 continue
             except Exception as e:
                 print(f"API v3 error (version {version}): {e}")
@@ -257,10 +283,7 @@ class LinkedInAPI:
         
         # Try new API first (v3 REST)
         payload = {"actor": actor, "message": {"text": text}}
-        if time.time() < self._rest_backoff_until:
-            versions_to_try: List[str] = []
-        else:
-            versions_to_try = self._rest_versions()
+        versions_to_try = self._rest_versions() if self._rest_allowed() else []
         tried_versions: List[str] = []
         while versions_to_try:
             version = versions_to_try.pop(0)
@@ -273,15 +296,18 @@ class LinkedInAPI:
                     r = c.post(f"{API_V3_BASE}/socialActions/{encoded}/comments", json=payload)
                     r.raise_for_status()
                     comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
-                    self._rest_backoff_until = 0.0
+                    self._mark_rest_success()
                     return {"id": comment_id}
             except httpx.HTTPStatusError as e:
                 print(f"Comment API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
                 if e.response.status_code == 426:
-                    self._rest_backoff_until = time.time() + 3600
-                    for candidate_version in self._extract_versions_from_error(e.response.text):
-                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
-                            versions_to_try.append(candidate_version)
+                    if self._rest_enabled_config:
+                        self._disable_rest(f"LinkedIn returned 426 for version {version}")
+                        versions_to_try = []
+                    if self._rest_disabled_reason is None:
+                        for candidate_version in self._extract_versions_from_error(e.response.text):
+                            if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                                versions_to_try.append(candidate_version)
                 continue
             except Exception as e:
                 print(f"Comment API v3 error (version {version}): {e}")
@@ -318,10 +344,7 @@ class LinkedInAPI:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
 
         # Try modern REST API first to avoid 400 errors for share URNs.
-        if time.time() < self._rest_backoff_until:
-            versions_to_try: List[str] = []
-        else:
-            versions_to_try = self._rest_versions()
+        versions_to_try = self._rest_versions() if self._rest_allowed() else []
         tried_versions: List[str] = []
         while versions_to_try:
             version = versions_to_try.pop(0)
@@ -346,15 +369,18 @@ class LinkedInAPI:
                             "message": {"text": e.get("message", {}).get("text", "")},
                             "created": e.get("createdAt", e.get("created", {}).get("time", 0)),
                         })
-                    self._rest_backoff_until = 0.0
+                    self._mark_rest_success()
                     return out
             except httpx.HTTPStatusError as e:
                 print(f"List comments API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
                 if e.response.status_code == 426:
-                    self._rest_backoff_until = time.time() + 3600
-                    for candidate_version in self._extract_versions_from_error(e.response.text):
-                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
-                            versions_to_try.append(candidate_version)
+                    if self._rest_enabled_config:
+                        self._disable_rest(f"LinkedIn returned 426 for version {version}")
+                        versions_to_try = []
+                    if self._rest_disabled_reason is None:
+                        for candidate_version in self._extract_versions_from_error(e.response.text):
+                            if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                                versions_to_try.append(candidate_version)
                 continue
             except Exception as e:
                 print(f"List comments API v3 error (version {version}): {e}")

@@ -16,6 +16,7 @@ class Config:
     LINKEDIN_SCOPES: str = os.getenv("LINKEDIN_SCOPES", "w_member_social openid profile email")
     LINKEDIN_REST_VERSION: str = os.getenv("LINKEDIN_REST_VERSION", "202409")
     LINKEDIN_REST_VERSION_FALLBACKS: str = os.getenv("LINKEDIN_REST_VERSION_FALLBACKS", "202407,202405")
+    LINKEDIN_ENABLE_REST: bool = os.getenv("LINKEDIN_ENABLE_REST", "false").lower() == "true"
 
     # Google Gemini
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
