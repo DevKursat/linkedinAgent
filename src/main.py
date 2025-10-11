@@ -157,7 +157,7 @@ QUEUE_TEMPLATE = """
     <a href="{{ url_for('index') }}" class="button">← Geri</a>
     
     <h2>Yeni Hedef Ekle</h2>
-    <form method="POST" action="{{ url_for('enqueue_target') }}">
+    <form method="POST" action="{{ url_for('enqueue_target_route') }}">
         <label>Hedef URL veya URN:</label>
         <input type="text" name="target_url" required placeholder="https://linkedin.com/feed/update/...">
         
