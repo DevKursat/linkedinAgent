@@ -15,6 +15,14 @@ def init_gemini():
 
 def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
     """Generate text using Gemini."""
+    # Fallback for environments without API key (useful for DRY_RUN demos/tests)
+    if not config.GOOGLE_API_KEY:
+        return (
+            "[DRY_RUN] AI content would be generated here. "
+            "Set GOOGLE_API_KEY to enable real generation.\n\nPrompt preview: "
+            + (prompt[:240] + ("…" if len(prompt) > 240 else ""))
+        )
+
     try:
         model = genai.GenerativeModel(config.GEMINI_MODEL)
         

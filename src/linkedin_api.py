@@ -3,20 +3,22 @@ import time
 import httpx
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlencode
-from src.config import cfg
-from src.db import get_conn
+from .config import config
+from . import db
 
 API_BASE = "https://api.linkedin.com/v2"
 
+
 class LinkedInAPI:
     def __init__(self):
-        self.client_id = cfg.LINKEDIN_CLIENT_ID
-        self.client_secret = cfg.LINKEDIN_CLIENT_SECRET
-        self.redirect_uri = cfg.LINKEDIN_REDIRECT_URI
-        self.scopes = cfg.LINKEDIN_SCOPES.split()
-        self._me_cache = None
+        self.client_id = config.LINKEDIN_CLIENT_ID
+        self.client_secret = config.LINKEDIN_CLIENT_SECRET
+        self.redirect_uri = config.LINKEDIN_REDIRECT_URI
+        self.scopes = config.LINKEDIN_SCOPES.split()
+        self._me_cache: Optional[Dict[str, Any]] = None
 
-    def auth_url(self, state: str) -> str:
+    # URLs and OAuth
+    def get_authorization_url(self, state: str) -> str:
         params = {
             "response_type": "code",
             "client_id": self.client_id,
@@ -26,7 +28,7 @@ class LinkedInAPI:
         }
         return "https://www.linkedin.com/oauth/v2/authorization?" + urlencode(params)
 
-    def exchange_code(self, code: str) -> None:
+    def exchange_code_for_token(self, code: str) -> None:
         token_url = "https://www.linkedin.com/oauth/v2/accessToken"
         data = {
             "grant_type": "authorization_code",
@@ -38,44 +40,47 @@ class LinkedInAPI:
         with httpx.Client(timeout=30) as c:
             r = c.post(token_url, data=data)
             r.raise_for_status()
-            data = r.json()
-        access_token = data["access_token"]
-        expires_in = data.get("expires_in", 0)
-        expires_at = int(time.time()) + int(expires_in) - 60
-        with get_conn() as conn:
-            conn.execute(
-                "INSERT INTO tokens(provider, access_token, refresh_token, expires_at) VALUES(?,?,?,?) "
-                "ON CONFLICT(provider) DO UPDATE SET access_token=excluded.access_token, expires_at=excluded.expires_at",
-                ("linkedin", access_token, None, expires_at),
-            )
+            payload = r.json()
+        access_token = payload["access_token"]
+        expires_in = int(payload.get("expires_in", 0))
+        # Save using existing db helper API (single-token table)
+        db.save_token(access_token, expires_in)
 
+    # Token and headers
     def _get_token(self) -> Optional[str]:
-        with get_conn() as conn:
-            cur = conn.execute("SELECT access_token, expires_at FROM tokens WHERE provider='linkedin'")
-            row = cur.fetchone()
-        if not row:
+        token = db.get_token()
+        if not token:
             return None
-        if row["expires_at"] and row["expires_at"] < int(time.time()):
+        # Basic expiry check: if stored expires_at in past, require relogin
+        expires_at = token.get("expires_at")
+        if expires_at and int(expires_at) < int(time.time()):
             raise RuntimeError("LinkedIn token expired. Please re-login.")
-        return row["access_token"]
+        return token.get("access_token")
 
     def _headers(self) -> Dict[str, str]:
         token = self._get_token()
         if not token:
             raise RuntimeError("LinkedIn not authenticated")
-        return {"Authorization": f"Bearer {token}", "X-Restli-Protocol-Version": "2.0.0", "Content-Type": "application/json"}
+        return {
+            "Authorization": f"Bearer {token}",
+            "X-Restli-Protocol-Version": "2.0.0",
+            "Content-Type": "application/json",
+        }
 
     def userinfo(self) -> Dict[str, Any]:
-        # OIDC userinfo (openid/profile/email ile çalışır)
-        with httpx.Client(timeout=30, headers={"Authorization": f"Bearer {self._get_token()}"}) as c:
+        # OIDC userinfo (openid/profile/email)
+        token = self._get_token()
+        if not token:
+            raise RuntimeError("LinkedIn not authenticated")
+        with httpx.Client(timeout=30, headers={"Authorization": f"Bearer {token}"}) as c:
             r = c.get("https://api.linkedin.com/v2/userinfo")
             r.raise_for_status()
             return r.json()
 
     def me(self) -> Dict[str, Any]:
-        if self._me_cache:
+        if self._me_cache is not None:
             return self._me_cache
-        # Önce klasik /v2/me dene (r_liteprofile gerektirir). 401/403 olursa OIDC userinfo'ya düş.
+        # Try classic /v2/me (requires r_liteprofile). Fallback to OIDC userinfo.
         try:
             with httpx.Client(timeout=30, headers=self._headers()) as c:
                 r = c.get(f"{API_BASE}/me")
@@ -87,7 +92,6 @@ class LinkedInAPI:
                 ui = self.userinfo()
                 given = ui.get("given_name") or ""
                 family = ui.get("family_name") or ""
-                # OIDC 'sub' genelde person id ile aynıdır; author URN için kullanırız.
                 self._me_cache = {
                     "id": ui.get("sub"),
                     "localizedFirstName": given or (ui.get("name") or "").split(" ")[0] if ui.get("name") else "",
@@ -97,7 +101,8 @@ class LinkedInAPI:
                 return self._me_cache
             raise
 
-    def post_ugc(self, text: str, visibility: str = "PUBLIC") -> str:
+    # Posting and comments
+    def post_ugc(self, text: str, visibility: str = "PUBLIC") -> Dict[str, Any]:
         me = self.me()
         author = f"urn:li:person:{me['id']}"
         payload = {
@@ -115,21 +120,22 @@ class LinkedInAPI:
             r = c.post(f"{API_BASE}/ugcPosts", json=payload)
             r.raise_for_status()
             urn = r.json().get("id") or r.headers.get("x-restli-id")
-            if urn and not urn.startswith("urn:"):
+            if urn and not str(urn).startswith("urn:"):
                 urn = f"urn:li:ugcPost:{urn}"
-            return urn
+            # Return a dict compatible with scheduler expectations
+            return {"id": urn.split(":")[-1] if urn else "", "urn": urn}
 
-    def comment_on_post(self, ugc_urn: str, text: str) -> str:
+    def comment_on_post(self, ugc_urn: str, text: str) -> Dict[str, Any]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:ugcPost:{ugc_urn}"
         payload = {"actor": f"urn:li:person:{self.me()['id']}", "message": {"text": text}}
         endpoint = f"{API_BASE}/socialActions/{social_urn}/comments"
         with httpx.Client(timeout=30, headers=self._headers()) as c:
             r = c.post(endpoint, json=payload)
             r.raise_for_status()
-            return r.headers.get("x-restli-id", "")
+            comment_id = r.headers.get("x-restli-id", "")
+            return {"id": comment_id}
 
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
-        # Bu çağrı r_member_social isteyebilir; yoksa 403 alırsak üst katman loglayacak.
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:ugcPost:{ugc_urn}"
         endpoint = f"{API_BASE}/socialActions/{social_urn}/comments"
         with httpx.Client(timeout=30, headers=self._headers()) as c:
@@ -137,12 +143,22 @@ class LinkedInAPI:
             r.raise_for_status()
             data = r.json()
             elements = data.get("elements", [])
-            out = []
+            out: List[Dict[str, Any]] = []
             for e in elements:
                 out.append({
-                    "urn": e.get("entityUrn"),
+                    "id": e.get("entityUrn", "").split(":")[-1],
                     "actor": e.get("actor"),
-                    "text": e.get("message", {}).get("text", ""),
+                    "message": {"text": e.get("message", {}).get("text", "")},
                     "created": e.get("created", {}).get("time", 0),
                 })
             return out
+
+
+_api_singleton: Optional[LinkedInAPI] = None
+
+
+def get_linkedin_api() -> LinkedInAPI:
+    global _api_singleton
+    if _api_singleton is None:
+        _api_singleton = LinkedInAPI()
+    return _api_singleton

@@ -4,7 +4,7 @@ import secrets
 from . import db
 from .config import config
 from .linkedin_api import LinkedInAPI
-from .proactive import enqueue_target
+from .proactive import enqueue_target as enqueue_target_fn
 from .utils import get_istanbul_time
 
 
@@ -247,7 +247,7 @@ def enqueue_target_route():
             pass
     
     # Use target_url as post content for suggestion (in real scenario, would fetch)
-    enqueue_target(target_url, target_urn, context or "Engaging with relevant content")
+    enqueue_target_fn(target_url, target_urn, context or "Engaging with relevant content")
     
     return redirect(url_for('queue'))
 
