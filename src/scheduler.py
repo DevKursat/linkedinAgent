@@ -77,6 +77,9 @@ def run_daily_post():
         if not post_urn and post_id:
             post_urn = f"urn:li:share:{post_id}"
         
+        if not post_id or not post_urn:
+            raise RuntimeError(f"LinkedIn API yanıtı eksik: id={post_id}, urn={post_urn}")
+        
         print(f"Posted successfully! ID: {post_id}, URN: {post_urn}")
         
         # Save to database

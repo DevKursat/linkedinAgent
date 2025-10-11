@@ -303,19 +303,31 @@ def enqueue_target_route():
     context = request.form.get('context', '').strip()
     
     if not target_url:
-        return "Target URL is required", 400
+        flash("Hedef URL gerekli", 'error')
+        return redirect(url_for('queue'))
     
     # If URN not provided, try to extract from URL
-    if not target_urn and 'ugcPost:' in target_url:
-        # Extract URN from URL
-        try:
-            urn_part = target_url.split('ugcPost:')[1].split('/')[0].split('?')[0]
-            target_urn = f"urn:li:ugcPost:{urn_part}"
-        except:
-            pass
+    if not target_urn:
+        # Try multiple patterns
+        if 'ugcPost:' in target_url:
+            try:
+                urn_part = target_url.split('ugcPost:')[1].split('/')[0].split('?')[0]
+                target_urn = f"urn:li:ugcPost:{urn_part}"
+            except:
+                pass
+        elif 'share:' in target_url:
+            try:
+                urn_part = target_url.split('share:')[1].split('/')[0].split('?')[0]
+                target_urn = f"urn:li:share:{urn_part}"
+            except:
+                pass
     
-    # Use target_url as post content for suggestion (in real scenario, would fetch)
-    enqueue_target_fn(target_url, target_urn, context or "Engaging with relevant content")
+    try:
+        # Use target_url as post content for suggestion (in real scenario, would fetch)
+        enqueue_target_fn(target_url, target_urn, context or "İlgili içerikle etkileşim")
+        flash("Hedef kuyruğa eklendi", 'success')
+    except Exception as e:
+        flash(f"Kuyruğa ekleme hatası: {e}", 'error')
     
     return redirect(url_for('queue'))
 
@@ -325,9 +337,11 @@ def discover():
     """Discover relevant posts by interests and enqueue suggestions."""
     try:
         discover_and_enqueue(limit=3)
+        flash("İlgili gönderiler bulundu ve kuyruğa eklendi", 'success')
         return redirect(url_for('queue'))
     except Exception as e:
-        return f"Error during discovery: {e}", 400
+        flash(f"Keşif hatası: {e}", 'error')
+        return redirect(url_for('queue'))
 
 @app.route('/diagnostics')
 def diagnostics():
@@ -337,14 +351,22 @@ def diagnostics():
 @app.route('/approve/<int:item_id>', methods=['POST'])
 def approve_item(item_id):
     """Approve a queue item."""
-    db.approve_queue_item(item_id)
+    try:
+        db.approve_queue_item(item_id)
+        flash("Öğe onaylandı", 'success')
+    except Exception as e:
+        flash(f"Onaylama hatası: {e}", 'error')
     return redirect(url_for('queue'))
 
 
 @app.route('/reject/<int:item_id>', methods=['POST'])
 def reject_item(item_id):
     """Reject a queue item."""
-    db.reject_queue_item(item_id)
+    try:
+        db.reject_queue_item(item_id)
+        flash("Öğe reddedildi", 'success')
+    except Exception as e:
+        flash(f"Reddetme hatası: {e}", 'error')
     return redirect(url_for('queue'))
 
 

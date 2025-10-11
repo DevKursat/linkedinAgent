@@ -14,7 +14,7 @@ def init_gemini():
 
 
 def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> str:
-    """Generate text using Gemini."""
+    """Generate text using Gemini with robust error handling."""
     # Fallback for environments without API key (useful for DRY_RUN demos/tests)
     if not config.GOOGLE_API_KEY:
         return (
@@ -31,28 +31,100 @@ def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 500) 
             max_output_tokens=max_tokens,
         )
         
+        # Add safety settings to prevent blocking
+        safety_settings = [
+            {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "threshold": "BLOCK_NONE"
+            },
+            {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_NONE"
+            },
+        ]
+        
         response = model.generate_content(
             prompt,
-            generation_config=generation_config
+            generation_config=generation_config,
+            safety_settings=safety_settings
         )
         
-        # Safe extraction: handle multi-part responses
-        if response.candidates and len(response.candidates) > 0:
-            candidate = response.candidates[0]
-            if candidate.content and candidate.content.parts:
-                # Concatenate all text parts
-                text_parts = [part.text for part in candidate.content.parts if hasattr(part, 'text')]
-                return "".join(text_parts).strip()
-        
-        # Fallback: try simple accessor (for backward compatibility)
+        # Method 1: Try candidates[0].content.parts (most reliable)
         try:
-            return response.text.strip()
-        except:
-            pass
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if hasattr(candidate, 'content') and candidate.content:
+                    if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                        # Concatenate all text parts
+                        text_parts = []
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                text_parts.append(part.text)
+                        if text_parts:
+                            result = "".join(text_parts).strip()
+                            if result:
+                                return result
+        except Exception as e:
+            print(f"Method 1 (parts) failed: {e}")
         
-        # Last resort
-        raise ValueError("Gemini response contained no usable text content")
+        # Method 2: Try simple .text accessor (backward compatibility)
+        try:
+            if hasattr(response, 'text') and response.text:
+                result = response.text.strip()
+                if result:
+                    return result
+        except Exception as e:
+            print(f"Method 2 (.text) failed: {e}")
         
-    except Exception as e:
-        print(f"Error generating text with Gemini: {e}")
+        # Method 3: Try _result.candidates[0].content.parts[0].text (internal structure)
+        try:
+            if hasattr(response, '_result'):
+                result_obj = response._result
+                if hasattr(result_obj, 'candidates') and result_obj.candidates:
+                    candidate = result_obj.candidates[0]
+                    if hasattr(candidate, 'content') and candidate.content:
+                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                            if hasattr(candidate.content.parts[0], 'text'):
+                                result = candidate.content.parts[0].text.strip()
+                                if result:
+                                    return result
+        except Exception as e:
+            print(f"Method 3 (_result) failed: {e}")
+        
+        # Method 4: Check if response was blocked
+        try:
+            if hasattr(response, 'prompt_feedback'):
+                feedback = response.prompt_feedback
+                if hasattr(feedback, 'block_reason'):
+                    raise ValueError(f"Gemini yanıtı engellendi: {feedback.block_reason}")
+        except Exception as e:
+            print(f"Block reason check: {e}")
+        
+        # Last resort: detailed error
+        error_details = []
+        if hasattr(response, 'candidates'):
+            error_details.append(f"candidates count: {len(response.candidates) if response.candidates else 0}")
+        if hasattr(response, 'prompt_feedback'):
+            error_details.append(f"prompt_feedback: {response.prompt_feedback}")
+        
+        raise ValueError(
+            f"Gemini yanıtı kullanılabilir metin içermiyor. "
+            f"Detaylar: {', '.join(error_details) if error_details else 'bilinmiyor'}. "
+            f"Lütfen promptu kontrol edin veya API durumunu inceleyin."
+        )
+        
+    except ValueError:
+        # Re-raise our custom errors
         raise
+    except Exception as e:
+        # Catch all other errors
+        print(f"Gemini API hatası: {e}")
+        raise ValueError(f"Gemini API ile iletişim hatası: {str(e)}")
