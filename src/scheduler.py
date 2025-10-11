@@ -71,9 +71,13 @@ def run_daily_post():
         result = api.post_ugc(post_text)
         
         post_id = result.get("id", "")
-        post_urn = f"urn:li:ugcPost:{post_id}" if post_id else ""
+        post_urn = result.get("urn", "")
         
-        print(f"Posted successfully! ID: {post_id}")
+        # Fallback: if urn not set, construct it
+        if not post_urn and post_id:
+            post_urn = f"urn:li:share:{post_id}"
+        
+        print(f"Posted successfully! ID: {post_id}, URN: {post_urn}")
         
         # Save to database
         db.save_post(post_id, post_urn, post_text, article['link'])

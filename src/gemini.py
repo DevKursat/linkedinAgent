@@ -36,7 +36,23 @@ def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 500) 
             generation_config=generation_config
         )
         
-        return response.text.strip()
+        # Safe extraction: handle multi-part responses
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if candidate.content and candidate.content.parts:
+                # Concatenate all text parts
+                text_parts = [part.text for part in candidate.content.parts if hasattr(part, 'text')]
+                return "".join(text_parts).strip()
+        
+        # Fallback: try simple accessor (for backward compatibility)
+        try:
+            return response.text.strip()
+        except:
+            pass
+        
+        # Last resort
+        raise ValueError("Gemini response contained no usable text content")
+        
     except Exception as e:
         print(f"Error generating text with Gemini: {e}")
         raise

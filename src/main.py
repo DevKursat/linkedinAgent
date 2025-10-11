@@ -24,21 +24,23 @@ db.init_db()
 # HTML Templates (inline for simplicity)
 INDEX_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-    <title>LinkedIn Agent - Status</title>
+    <title>LinkedIn Ajan - Durum</title>
+    <meta charset="UTF-8">
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
         h1 { color: #0077b5; }
         .status { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0; }
         .info { margin: 10px 0; }
         .button { display: inline-block; padding: 10px 20px; background: #0077b5; color: white; 
-                  text-decoration: none; border-radius: 5px; margin: 5px; }
+                  text-decoration: none; border-radius: 5px; margin: 5px; border: none; cursor: pointer; }
         .button:hover { background: #005885; }
+        textarea, input[type="text"] { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; font-family: Arial, sans-serif; }
     </style>
 </head>
 <body>
-        <h1>LinkedIn Agent</h1>
+        <h1>LinkedIn Ajan</h1>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -48,80 +50,80 @@ INDEX_TEMPLATE = """
         {% endwith %}
     
     <div class="status">
-        <h2>Status</h2>
-        <div class="info"><strong>Time:</strong> {{ time }}</div>
-        <div class="info"><strong>Timezone:</strong> {{ timezone }}</div>
-        <div class=\"info\"><strong>DRY_RUN:</strong> {{ dry_run }}</div>
-        <div class="info"><strong>Authenticated:</strong> {{ authenticated }}</div>
+        <h2>Durum</h2>
+        <div class="info"><strong>Zaman:</strong> {{ time }}</div>
+        <div class="info"><strong>Saat Dilimi:</strong> {{ timezone }}</div>
+        <div class="info"><strong>Test Modu:</strong> {{ 'Açık' if dry_run else 'Kapalı (Canlı)' }}</div>
+        <div class="info"><strong>LinkedIn Girişi:</strong> {{ 'Yapıldı ✓' if authenticated else 'Yapılmadı' }}</div>
         {% if persona %}
-        <div class="info"><strong>Persona:</strong> {{ persona.name }}, {{ persona.age }}, {{ persona.role }}</div>
+        <div class="info"><strong>Kişilik:</strong> {{ persona.name }}, {{ persona.age }}, {{ persona.role }}</div>
         {% endif %}
-        <div class=\"info\"><strong>Next runs:</strong>
+        <div class="info"><strong>Zamanlanmış İşler:</strong>
             <ul>
-                <li>Daily post: {{ next_runs.get('daily_post','-') }}</li>
-                <li>Comments poll: {{ next_runs.get('poll_comments','-') }}</li>
-                <li>Proactive queue: {{ next_runs.get('proactive_queue','-') }}</li>
+                <li>Günlük paylaşım: {{ next_runs.get('daily_post','-') }}</li>
+                <li>Yorum kontrolü: {{ next_runs.get('poll_comments','-') }}</li>
+                <li>Proaktif kuyruk: {{ next_runs.get('proactive_queue','-') }}</li>
             </ul>
         </div>
     </div>
     
     <div class="status">
-        <h2>Actions</h2>
+        <h2>İşlemler</h2>
         {% if not authenticated %}
-        <a href="{{ url_for('login') }}" class="button">Login with LinkedIn</a>
+        <a href="{{ url_for('login') }}" class="button">LinkedIn ile Giriş Yap</a>
         {% else %}
-        <a href="{{ url_for('logout') }}" class="button" style="background: #dc3545;">Logout</a>
+        <a href="{{ url_for('logout') }}" class="button" style="background: #dc3545;">Çıkış Yap</a>
         {% endif %}
-        <a href="{{ url_for('health') }}" class="button">Health Check</a>
-    <a href="{{ url_for('diagnostics') }}" class="button">Diagnostics</a>
-        <a href="{{ url_for('queue') }}" class="button">Proactive Queue</a>
+        <a href="{{ url_for('health') }}" class="button">Sağlık Kontrolü</a>
+        <a href="{{ url_for('diagnostics') }}" class="button">Tanılama</a>
+        <a href="{{ url_for('queue') }}" class="button">Proaktif Kuyruk</a>
         <form method="POST" action="{{ url_for('discover') }}" style="display:inline;">
-            <button class="button" type="submit">Discover Relevant Posts</button>
+            <button class="button" type="submit">İlgili Gönderileri Bul</button>
         </form>
-        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
-            <input type=\"hidden\" name=\"job\" value=\"daily_post\">
-            <button class=\"button\" type=\"submit\">Run Daily Post Now</button>
+        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
+            <input type="hidden" name="job" value="daily_post">
+            <button class="button" type="submit">Günlük Paylaşımı Şimdi Yap</button>
         </form>
-        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
-            <input type=\"hidden\" name=\"job\" value=\"poll_comments\">
-            <button class=\"button\" type=\"submit\">Poll Comments Now</button>
+        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
+            <input type="hidden" name="job" value="poll_comments">
+            <button class="button" type="submit">Yorumları Şimdi Kontrol Et</button>
         </form>
-        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
-            <input type=\"hidden\" name=\"job\" value=\"proactive_queue\">
-            <button class=\"button\" type=\"submit\">Process Proactive Now</button>
+        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
+            <input type="hidden" name="job" value="proactive_queue">
+            <button class="button" type="submit">Proaktif Kuyruğu İşle</button>
         </form>
     </div>
     
     <div class="status">
-        <h2>Recent Posts</h2>
+        <h2>Son Paylaşımlar</h2>
         {% if posts %}
             {% for post in posts %}
             <div class="info">
                 <strong>{{ post.posted_at }}</strong><br>
                 {{ post.content[:100] }}...
-                {% if post.follow_up_posted %}✓ Follow-up posted{% endif %}
+                {% if post.follow_up_posted %}✓ Takip yorumu eklendi{% endif %}
             </div>
             {% endfor %}
         {% else %}
-            <div class="info">No posts yet</div>
+            <div class="info">Henüz paylaşım yok</div>
         {% endif %}
     </div>
 
-    <div class=\"status\">
-        <h2>Manual Share</h2>
-        <form method=\"POST\" action=\"{{ url_for('manual_post') }}\">
-            <textarea name=\"content\" rows=\"6\" placeholder=\"Write a post...\" required>{{ refined_text or '' }}</textarea>
-            <button type=\"submit\" class=\"button\">Share Post</button>
+    <div class="status">
+        <h2>Manuel Paylaşım</h2>
+        <form method="POST" action="{{ url_for('manual_post') }}">
+            <textarea name="content" rows="6" placeholder="Gönderi yazın..." required>{{ refined_text or '' }}</textarea>
+            <button type="submit" class="button">Paylaş</button>
         </form>
-        <form method=\"POST\" action=\"{{ url_for('refine_post') }}\" style=\"margin-top:10px;\">
-            <textarea name=\"draft\" rows=\"3\" placeholder=\"Paste your draft here to refine...\"></textarea>
-            <button type=\"submit\" class=\"button\">Refine with AI</button>
+        <form method="POST" action="{{ url_for('refine_post') }}" style="margin-top:10px;">
+            <textarea name="draft" rows="3" placeholder="AI ile düzeltmek için taslağınızı buraya yapıştırın..."></textarea>
+            <button type="submit" class="button">AI ile Düzenle</button>
         </form>
-        <h3>Comment on a Post</h3>
-        <form method=\"POST\" action=\"{{ url_for('manual_comment') }}\">
-            <input type=\"text\" name=\"target_urn\" placeholder=\"urn:li:ugcPost:...\" required>
-            <textarea name=\"comment\" rows=\"3\" placeholder=\"Write a comment...\" required></textarea>
-            <button type=\"submit\" class=\"button\">Send Comment</button>
+        <h3>Bir Gönderiye Yorum Yap</h3>
+        <form method="POST" action="{{ url_for('manual_comment') }}">
+            <input type="text" name="target_urn" placeholder="urn:li:share:..." required>
+            <textarea name="comment" rows="3" placeholder="Yorum yazın..." required></textarea>
+            <button type="submit" class="button">Yorumu Gönder</button>
         </form>
     </div>
 </body>
@@ -130,9 +132,10 @@ INDEX_TEMPLATE = """
 
 QUEUE_TEMPLATE = """
 <!DOCTYPE html>
-<html>
+<html lang="tr">
 <head>
-    <title>LinkedIn Agent - Proactive Queue</title>
+    <title>LinkedIn Ajan - Proaktif Kuyruk</title>
+    <meta charset="UTF-8">
     <style>
         body { font-family: Arial, sans-serif; max-width: 1000px; margin: 50px auto; padding: 20px; }
         h1 { color: #0077b5; }
@@ -150,52 +153,52 @@ QUEUE_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>Proactive Queue</h1>
-    <a href="{{ url_for('index') }}" class="button">← Back</a>
+    <h1>Proaktif Kuyruk</h1>
+    <a href="{{ url_for('index') }}" class="button">← Geri</a>
     
-    <h2>Add New Target</h2>
+    <h2>Yeni Hedef Ekle</h2>
     <form method="POST" action="{{ url_for('enqueue_target') }}">
-        <label>Target URL or URN:</label>
+        <label>Hedef URL veya URN:</label>
         <input type="text" name="target_url" required placeholder="https://linkedin.com/feed/update/...">
         
-        <label>Target URN (optional, will be extracted from URL if possible):</label>
-        <input type="text" name="target_urn" placeholder="urn:li:ugcPost:...">
+        <label>Hedef URN (isteğe bağlı, URL'den çıkarılacak):</label>
+        <input type="text" name="target_urn" placeholder="urn:li:share:...">
         
-        <label>Context (optional):</label>
-        <textarea name="context" rows="3" placeholder="Why do you want to comment on this post?"></textarea>
+        <label>Bağlam (isteğe bağlı):</label>
+        <textarea name="context" rows="3" placeholder="Bu gönderiye neden yorum yapmak istiyorsunuz?"></textarea>
         
-        <button type="submit" class="button">Enqueue</button>
+        <button type="submit" class="button">Kuyruğa Ekle</button>
     </form>
     
-    <h2>Pending Approval ({{ pending|length }})</h2>
+    <h2>Onay Bekleyenler ({{ pending|length }})</h2>
     {% for item in pending %}
     <div class="item">
         <div><strong>URL:</strong> {{ item.target_url }}</div>
-        <div><strong>URN:</strong> {{ item.target_urn or 'N/A' }}</div>
-        <div><strong>Context:</strong> {{ item.context or 'N/A' }}</div>
-        <div><strong>Suggested Comment:</strong> {{ item.suggested_comment }}</div>
-        <div><strong>Created:</strong> {{ item.created_at }}</div>
+        <div><strong>URN:</strong> {{ item.target_urn or 'Yok' }}</div>
+        <div><strong>Bağlam:</strong> {{ item.context or 'Yok' }}</div>
+        <div><strong>Önerilen Yorum:</strong> {{ item.suggested_comment }}</div>
+        <div><strong>Oluşturulma:</strong> {{ item.created_at }}</div>
         <form method="POST" action="{{ url_for('approve_item', item_id=item.id) }}" style="display: inline; padding: 0; margin: 0; background: none;">
-            <button type="submit" class="button approve">Approve</button>
+            <button type="submit" class="button approve">Onayla</button>
         </form>
         <form method="POST" action="{{ url_for('reject_item', item_id=item.id) }}" style="display: inline; padding: 0; margin: 0; background: none;">
-            <button type="submit" class="button reject">Reject</button>
+            <button type="submit" class="button reject">Reddet</button>
         </form>
     </div>
     {% else %}
-    <div class="item">No pending items</div>
+    <div class="item">Bekleyen öğe yok</div>
     {% endfor %}
     
-    <h2>Approved ({{ approved|length }})</h2>
+    <h2>Onaylananlar ({{ approved|length }})</h2>
     {% for item in approved %}
     <div class="item">
         <div><strong>URL:</strong> {{ item.target_url }}</div>
-        <div><strong>Comment:</strong> {{ item.suggested_comment }}</div>
-        <div><strong>Approved:</strong> {{ item.approved_at }}</div>
-        <div>{% if item.posted_at %}<strong>Posted:</strong> {{ item.posted_at }}{% else %}<em>Waiting to post...</em>{% endif %}</div>
+        <div><strong>Yorum:</strong> {{ item.suggested_comment }}</div>
+        <div><strong>Onaylandı:</strong> {{ item.approved_at }}</div>
+        <div>{% if item.posted_at %}<strong>Gönderildi:</strong> {{ item.posted_at }}{% else %}<em>Gönderme bekleniyor...</em>{% endif %}</div>
     </div>
     {% else %}
-    <div class="item">No approved items</div>
+    <div class="item">Onaylanmış öğe yok</div>
     {% endfor %}
 </body>
 </html>
@@ -275,7 +278,7 @@ def logout():
     """Logout: delete token and clear session."""
     db.delete_token()
     session.clear()
-    flash("Logged out successfully", 'success')
+    flash("Başarıyla çıkış yapıldı", 'success')
     return redirect(url_for('index'))
 
 
@@ -351,10 +354,10 @@ def trigger_job():
     job = request.form.get('job', '')
     try:
         run_now(job)
-        flash(f"Triggered job: {job}", 'success')
+        flash(f"İş tetiklendi: {job}", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        flash(f"Error triggering job: {e}", 'error')
+        flash(f"İş tetiklenirken hata: {e}", 'error')
         return redirect(url_for('index'))
 
 
@@ -363,11 +366,11 @@ def manual_post():
     """Manually share a post immediately."""
     content = request.form.get('content', '').strip()
     if not content:
-        flash("Post content required", 'error')
+        flash("Gönderi içeriği gerekli", 'error')
         return redirect(url_for('index'))
     if config.DRY_RUN:
         print("[DRY_RUN] Manual post:", content[:200])
-        flash("[DRY_RUN] Manual post accepted (no real post sent)", 'success')
+        flash("[TEST MODU] Gönderi kabul edildi (gerçek paylaşım yapılmadı)", 'success')
         return redirect(url_for('index'))
     try:
         api = LinkedInAPI()
@@ -375,12 +378,12 @@ def manual_post():
         post_id = res.get('id', '')
         post_urn = res.get('urn', '')
         if not post_id and not post_urn:
-            raise RuntimeError("LinkedIn API did not return a post id/urn")
+            raise RuntimeError("LinkedIn API gönderi id/urn döndürmedi")
         db.save_post(post_id, post_urn, content, None)
-        flash("Post shared successfully", 'success')
+        flash("Gönderi başarıyla paylaşıldı", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        flash(f"Error posting: {e}", 'error')
+        flash(f"Paylaşım hatası: {e}", 'error')
         return redirect(url_for('index'))
 
 
@@ -390,19 +393,19 @@ def manual_comment():
     target_urn = request.form.get('target_urn', '').strip()
     comment = request.form.get('comment', '').strip()
     if not target_urn or not comment:
-        flash("target_urn and comment required", 'error')
+        flash("Hedef URN ve yorum gerekli", 'error')
         return redirect(url_for('index'))
     if config.DRY_RUN:
         print(f"[DRY_RUN] Manual comment to {target_urn}:", comment[:200])
-        flash("[DRY_RUN] Comment accepted (no real comment sent)", 'success')
+        flash("[TEST MODU] Yorum kabul edildi (gerçek yorum gönderilmedi)", 'success')
         return redirect(url_for('index'))
     try:
         api = LinkedInAPI()
         api.comment_on_post(target_urn, comment)
-        flash("Comment sent successfully", 'success')
+        flash("Yorum başarıyla gönderildi", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        flash(f"Error commenting: {e}", 'error')
+        flash(f"Yorum gönderme hatası: {e}", 'error')
         return redirect(url_for('index'))
 
 
@@ -411,12 +414,12 @@ def refine_post():
     """Use Gemini to refine the user's draft and prefill the manual post textarea."""
     draft = request.form.get('draft', '').strip()
     if not draft:
-        flash("Please paste a draft to refine", 'error')
+        flash("Lütfen düzenlemek için bir taslak yapıştırın", 'error')
         return redirect(url_for('index'))
     try:
         prompt = generate_refine_post_prompt(draft, language='English')
         refined = generate_text(prompt, temperature=0.6, max_tokens=400)
-        flash("Draft refined. You can review and post.", 'success')
+        flash("Taslak düzenlendi. İnceleyip paylaşabilirsiniz.", 'success')
         # Re-render index with refined_text filled
         token = db.get_token()
         authenticated = token is not None
@@ -437,7 +440,7 @@ def refine_post():
             refined_text=refined,
         )
     except Exception as e:
-        flash(f"Error refining draft: {e}", 'error')
+        flash(f"Taslak düzenleme hatası: {e}", 'error')
         return redirect(url_for('index'))
 
 
