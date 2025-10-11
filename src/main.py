@@ -69,15 +69,6 @@ INDEX_TEMPLATE = """
             </ul>
         </div>
     </div>
-    
-    <div class="status">
-        <h2>Yapılacaklar ({{ checklist_done }}/{{ checklist_total }})</h2>
-        <ul class="checklist">
-        {% for item in checklist %}
-            <li class="{{ 'done' if item.done else '' }}">{{ '✓' if item.done else '•' }} {{ item.label }}</li>
-        {% endfor %}
-        </ul>
-    </div>
 
     <div class="status">
         <h2>İşlemler</h2>
@@ -217,18 +208,6 @@ QUEUE_TEMPLATE = """
 """
 
 
-def build_checklist_context():
-    """Return checklist entries highlighting completed hardening tasks."""
-    checklist = [
-        {"label": "Gemini artık tam uzunlukta yazıyor", "done": True},
-        {"label": "Takip yorumları 66 sn içinde kesinleşiyor", "done": True},
-        {"label": "LinkedIn REST sürüm fallback zinciri aktif", "done": True},
-        {"label": "Proaktif kuyrukta boş taslak kalmıyor", "done": True},
-    ]
-    completed = sum(1 for item in checklist if item["done"])
-    return checklist, completed, len(checklist)
-
-
 @app.route('/')
 def index():
     """Main status page."""
@@ -236,7 +215,6 @@ def index():
     authenticated = token is not None
     
     posts = db.get_recent_posts(limit=5)
-    checklist, checklist_done, checklist_total = build_checklist_context()
     
     return render_template_string(
         INDEX_TEMPLATE,
@@ -251,9 +229,6 @@ def index():
         },
         posts=posts,
         next_runs=get_next_runs(),
-        checklist=checklist,
-        checklist_done=checklist_done,
-        checklist_total=checklist_total,
     )
 
 
@@ -478,7 +453,6 @@ def refine_post():
         token = db.get_token()
         authenticated = token is not None
         posts = db.get_recent_posts(limit=5)
-        checklist, checklist_done, checklist_total = build_checklist_context()
         return render_template_string(
             INDEX_TEMPLATE,
             time=get_istanbul_time(),
@@ -493,9 +467,6 @@ def refine_post():
             posts=posts,
             next_runs=get_next_runs(),
             refined_text=refined,
-            checklist=checklist,
-            checklist_done=checklist_done,
-            checklist_total=checklist_total,
         )
     except Exception as e:
         flash(f"Taslak düzenleme hatası: {e}", 'error')

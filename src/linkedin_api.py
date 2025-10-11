@@ -357,6 +357,35 @@ class LinkedInAPI:
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
 
+        # Extract post ID from URN for new API
+        def extract_post_id(urn: str) -> Optional[str]:
+            if urn.startswith("urn:li:share:"):
+                return urn.split(":")[-1]
+            elif urn.startswith("urn:li:ugcPost:"):
+                return urn.split(":")[-1]
+            return None
+
+        post_id = extract_post_id(social_urn)
+        if post_id:
+            # Try new posts API endpoint first
+            try:
+                with httpx.Client(timeout=30, headers=self._headers()) as c:
+                    r = c.get(f"{API_BASE}/posts/{post_id}/comments", params={"count": count})
+                    r.raise_for_status()
+                    data = r.json()
+                    elements = data.get("elements", [])
+                    out: List[Dict[str, Any]] = []
+                    for e in elements:
+                        out.append({
+                            "id": e.get("id", "") or e.get("entityUrn", "").split(":")[-1],
+                            "actor": e.get("actor"),
+                            "message": {"text": e.get("message", {}).get("text", "")},
+                            "created": e.get("createdAt", e.get("created", {}).get("time", 0)),
+                        })
+                    return out
+            except Exception as e:
+                print(f"New posts comments API failed for post {post_id}: {e}")
+
         # Try modern REST API first to avoid 400 errors for share URNs.
         versions_to_try = self._rest_versions() if self._rest_allowed() else []
         tried_versions: List[str] = []
