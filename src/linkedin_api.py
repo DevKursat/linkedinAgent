@@ -7,6 +7,7 @@ from .config import config
 from . import db
 
 API_BASE = "https://api.linkedin.com/v2"
+API_V3_BASE = "https://api.linkedin.com/rest"
 
 
 class LinkedInAPI:
@@ -67,6 +68,18 @@ class LinkedInAPI:
             "Content-Type": "application/json",
         }
 
+    def _headers_v3(self) -> Dict[str, str]:
+        """Headers for LinkedIn API v3 (REST API)."""
+        token = self._get_token()
+        if not token:
+            raise RuntimeError("LinkedIn not authenticated")
+        return {
+            "Authorization": f"Bearer {token}",
+            "LinkedIn-Version": "202405",  # API version
+            "Content-Type": "application/json",
+            "X-Restli-Protocol-Version": "2.0.0",
+        }
+
     def userinfo(self) -> Dict[str, Any]:
         # OIDC userinfo (openid/profile/email)
         token = self._get_token()
@@ -103,10 +116,51 @@ class LinkedInAPI:
 
     # Posting and comments
     def post_ugc(self, text: str, visibility: str = "PUBLIC") -> Dict[str, Any]:
+        """Post to LinkedIn using the new Posts API (v3)."""
         me = self.me()
-        author = f"urn:li:person:{me['id']}"
+        person_id = me['id']
+        author_urn = f"urn:li:person:{person_id}"
+        
+        # LinkedIn API v3 Posts endpoint
         payload = {
-            "author": author,
+            "author": author_urn,
+            "commentary": text,
+            "visibility": visibility,  # PUBLIC, CONNECTIONS, or LOGGED_IN
+            "distribution": {
+                "feedDistribution": "MAIN_FEED",
+                "targetEntities": [],
+                "thirdPartyDistributionChannels": []
+            },
+            "lifecycleState": "PUBLISHED",
+            "isReshareDisabledByAuthor": False
+        }
+        
+        # Try new v3 REST API first
+        try:
+            with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
+                r = c.post(f"{API_V3_BASE}/posts", json=payload)
+                r.raise_for_status()
+                response_data = r.json()
+                post_id = response_data.get("id", "")
+                
+                # Extract URN from response
+                if post_id:
+                    # New API returns full URN or just ID
+                    if post_id.startswith("urn:"):
+                        urn = post_id
+                        post_id = post_id.split(":")[-1]
+                    else:
+                        urn = f"urn:li:share:{post_id}"
+                    
+                    return {"id": post_id, "urn": urn}
+        except httpx.HTTPStatusError as e:
+            print(f"API v3 failed: {e.response.status_code} - {e.response.text}")
+            # Fallback to old UGC API
+            pass
+        
+        # Fallback: Try old ugcPosts API (might still work for some apps)
+        payload_v2 = {
+            "author": author_urn,
             "lifecycleState": "PUBLISHED",
             "specificContent": {
                 "com.linkedin.ugc.ShareContent": {
@@ -116,8 +170,9 @@ class LinkedInAPI:
             },
             "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": visibility},
         }
+        
         with httpx.Client(timeout=30, headers=self._headers()) as c:
-            r = c.post(f"{API_BASE}/ugcPosts", json=payload)
+            r = c.post(f"{API_BASE}/ugcPosts", json=payload_v2)
             r.raise_for_status()
             urn = r.json().get("id") or r.headers.get("x-restli-id")
             if urn and not str(urn).startswith("urn:"):
@@ -126,9 +181,34 @@ class LinkedInAPI:
             return {"id": urn.split(":")[-1] if urn else "", "urn": urn}
 
     def comment_on_post(self, ugc_urn: str, text: str) -> Dict[str, Any]:
-        social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:ugcPost:{ugc_urn}"
-        payload = {"actor": f"urn:li:person:{self.me()['id']}", "message": {"text": text}}
-        endpoint = f"{API_BASE}/socialActions/{social_urn}/comments"
+        """Add a comment to a post. Works with both old ugcPost and new share URNs."""
+        # Normalize URN
+        if not ugc_urn.startswith("urn:"):
+            ugc_urn = f"urn:li:share:{ugc_urn}"
+        
+        me = self.me()
+        actor = f"urn:li:person:{me['id']}"
+        
+        # Try new API first (v3 REST)
+        try:
+            payload = {
+                "actor": actor,
+                "message": {"text": text}
+            }
+            with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
+                # New endpoint format
+                r = c.post(f"{API_V3_BASE}/socialActions/{ugc_urn}/comments", json=payload)
+                r.raise_for_status()
+                comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
+                return {"id": comment_id}
+        except httpx.HTTPStatusError as e:
+            print(f"Comment API v3 failed: {e.response.status_code} - {e.response.text}")
+            # Fallback to v2
+            pass
+        
+        # Fallback to old API
+        payload = {"actor": actor, "message": {"text": text}}
+        endpoint = f"{API_BASE}/socialActions/{ugc_urn}/comments"
         with httpx.Client(timeout=30, headers=self._headers()) as c:
             r = c.post(endpoint, json=payload)
             r.raise_for_status()
