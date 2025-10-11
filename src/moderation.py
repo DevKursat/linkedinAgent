@@ -1,5 +1,6 @@
 """Content moderation and filtering."""
 from typing import Tuple
+import re
 from .config import config
 
 
@@ -26,6 +27,15 @@ SENSITIVE_KEYWORDS = [
 ]
 
 
+def _contains_keyword(text_lower: str, keyword: str) -> bool:
+    """Return True if keyword appears as a standalone token (case-folded)."""
+    # For Asian characters or keywords containing non-word chars, simple containment is fine
+    if any(ord(ch) > 127 for ch in keyword) or not keyword.isalnum():
+        return keyword in text_lower
+    pattern = r"\b" + re.escape(keyword) + r"\b"
+    return re.search(pattern, text_lower) is not None
+
+
 def is_blocked(text: str) -> Tuple[bool, str]:
     """Check if content should be blocked."""
     text_lower = text.lower()
@@ -33,13 +43,13 @@ def is_blocked(text: str) -> Tuple[bool, str]:
     # Check politics
     if config.BLOCK_POLITICS:
         for keyword in POLITICS_KEYWORDS:
-            if keyword in text_lower:
+            if _contains_keyword(text_lower, keyword):
                 return True, f"blocked: political content ({keyword})"
     
     # Check speculative crypto
     if config.BLOCK_SPECULATIVE_CRYPTO:
         for keyword in CRYPTO_KEYWORDS:
-            if keyword in text_lower:
+            if _contains_keyword(text_lower, keyword):
                 return True, f"blocked: speculative crypto ({keyword})"
     
     return False, ""
@@ -53,7 +63,7 @@ def is_sensitive(text: str) -> Tuple[bool, str]:
     text_lower = text.lower()
     
     for keyword in SENSITIVE_KEYWORDS:
-        if keyword in text_lower:
+        if _contains_keyword(text_lower, keyword):
             return True, f"sensitive: {keyword}"
     
     return False, ""
