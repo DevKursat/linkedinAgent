@@ -4,6 +4,16 @@ from typing import Optional
 from .config import config
 
 
+FINISH_REASON_LABELS = {
+    0: "FINISH_REASON_UNSPECIFIED",
+    1: "STOP",
+    2: "MAX_TOKENS",
+    3: "SAFETY",
+    4: "RECITATION",
+    5: "OTHER",
+}
+
+
 def init_gemini():
     """Initialize Gemini API."""
     if config.GOOGLE_API_KEY:
@@ -13,7 +23,12 @@ def init_gemini():
         print("Warning: GOOGLE_API_KEY not set")
 
 
-def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 1000) -> str:
+def generate_text(
+    prompt: str,
+    temperature: float = 0.7,
+    max_tokens: int = 1000,
+    _attempt: int = 0,
+) -> str:
     """Generate text using Gemini with robust error handling."""
     # Fallback for environments without API key (useful for DRY_RUN demos/tests)
     if not config.GOOGLE_API_KEY:
@@ -56,6 +71,21 @@ def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 1000)
             generation_config=generation_config,
             safety_settings=safety_settings
         )
+
+        candidate = response.candidates[0] if getattr(response, "candidates", None) else None
+        finish_reason_value = None
+        finish_reason_label = ""
+        if candidate is not None:
+            finish_reason = getattr(candidate, "finish_reason", None)
+            if finish_reason is not None:
+                finish_reason_value = getattr(finish_reason, "value", finish_reason)
+                finish_reason_label = getattr(finish_reason, "name", "")
+                if not finish_reason_label and isinstance(finish_reason_value, int):
+                    finish_reason_label = FINISH_REASON_LABELS.get(
+                        finish_reason_value, str(finish_reason_value)
+                    )
+                elif not finish_reason_label:
+                    finish_reason_label = str(finish_reason)
         
         # Method 1: Try simple .text accessor (recommended by Gemini docs, works for most cases)
         try:
@@ -70,22 +100,21 @@ def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 1000)
         
         # Method 2: Try candidates[0].content.parts (for multi-part responses)
         try:
-            if response.candidates and len(response.candidates) > 0:
-                candidate = response.candidates[0]
-                if hasattr(candidate, 'content') and candidate.content:
-                    if hasattr(candidate.content, 'parts') and candidate.content.parts:
-                        # Concatenate all text parts
-                        text_parts = []
-                        for part in candidate.content.parts:
-                            if hasattr(part, 'text'):
-                                text_value = getattr(part, 'text', '')
-                                if text_value and str(text_value).strip():
-                                    text_parts.append(str(text_value))
-                        if text_parts:
-                            result = "".join(text_parts).strip()
-                            if result:
-                                print(f"Method 2 (parts) success: extracted {len(result)} chars")
-                                return result
+            if candidate is not None:
+                content = getattr(candidate, 'content', None)
+                parts = getattr(content, 'parts', None) if content else None
+                if parts:
+                    text_parts = []
+                    for part in parts:
+                        if hasattr(part, 'text'):
+                            text_value = getattr(part, 'text', '')
+                            if text_value and str(text_value).strip():
+                                text_parts.append(str(text_value))
+                    if text_parts:
+                        result = "".join(text_parts).strip()
+                        if result:
+                            print(f"Method 2 (parts) success: extracted {len(result)} chars")
+                            return result
         except Exception as e:
             print(f"Method 2 (parts) failed: {e}")
         
@@ -117,9 +146,34 @@ def generate_text(prompt: str, temperature: float = 0.7, max_tokens: int = 1000)
         # Last resort: detailed error
         error_details = []
         if hasattr(response, 'candidates'):
-            error_details.append(f"candidates count: {len(response.candidates) if response.candidates else 0}")
+            error_details.append(
+                f"candidates count: {len(response.candidates) if response.candidates else 0}"
+            )
         if hasattr(response, 'prompt_feedback'):
             error_details.append(f"prompt_feedback: {response.prompt_feedback}")
+        if finish_reason_label:
+            error_details.append(f"finish_reason: {finish_reason_label}")
+        elif finish_reason_value is not None:
+            error_details.append(f"finish_reason: {finish_reason_value}")
+
+        # Retry automatically if response was truncated
+        if (
+            (finish_reason_label == "MAX_TOKENS" or finish_reason_value == 2)
+            and _attempt < 2
+            and max_tokens < 2048
+        ):
+            new_max_tokens = min(max_tokens + 400, 2048)
+            if new_max_tokens > max_tokens:
+                print(
+                    "Gemini response truncated (finish_reason=MAX_TOKENS). "
+                    f"Retrying with max_tokens={new_max_tokens} (attempt {_attempt + 1})."
+                )
+                return generate_text(
+                    prompt,
+                    temperature=temperature,
+                    max_tokens=new_max_tokens,
+                    _attempt=_attempt + 1,
+                )
         
         raise ValueError(
             f"Gemini yanıtı kullanılabilir metin içermiyor. "
