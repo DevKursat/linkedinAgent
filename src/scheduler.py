@@ -286,10 +286,9 @@ def schedule_daily_post():
         id='daily_post',
         replace_existing=True
     )
-    try:
-        db.set_schedule('daily_post', job.next_run_time)
-    except Exception:
-        pass
+    
+    # Return job for further processing
+    return job
 
 
 def start_scheduler():
@@ -305,7 +304,7 @@ def start_scheduler():
     scheduler = BackgroundScheduler(timezone=config.TZ)
     
     # Schedule daily post
-    schedule_daily_post()
+    daily_job = schedule_daily_post()
     
     # Poll comments every 7 minutes
     poll_job = scheduler.add_job(
@@ -327,6 +326,12 @@ def start_scheduler():
     print("Scheduler started successfully!")
     
     # Save all next_run times to DB after scheduler starts
+    try:
+        if daily_job and daily_job.next_run_time:
+            db.set_schedule('daily_post', daily_job.next_run_time)
+    except Exception as e:
+        print(f"Warning: Could not save daily_post schedule: {e}")
+    
     try:
         if poll_job and poll_job.next_run_time:
             db.set_schedule('poll_comments', poll_job.next_run_time)
