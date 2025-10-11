@@ -308,31 +308,36 @@ def start_scheduler():
     schedule_daily_post()
     
     # Poll comments every 7 minutes
-    scheduler.add_job(
+    poll_job = scheduler.add_job(
         poll_and_reply_comments,
         IntervalTrigger(minutes=7),
         id='poll_comments',
         replace_existing=True
     )
-    try:
-        db.set_schedule('poll_comments', scheduler.get_job('poll_comments').next_run_time)
-    except Exception:
-        pass
     
     # Process proactive queue every hour
-    scheduler.add_job(
+    queue_job = scheduler.add_job(
         process_proactive_queue,
         IntervalTrigger(hours=1),
         id='proactive_queue',
         replace_existing=True
     )
-    try:
-        db.set_schedule('proactive_queue', scheduler.get_job('proactive_queue').next_run_time)
-    except Exception:
-        pass
     
     scheduler.start()
     print("Scheduler started successfully!")
+    
+    # Save all next_run times to DB after scheduler starts
+    try:
+        if poll_job and poll_job.next_run_time:
+            db.set_schedule('poll_comments', poll_job.next_run_time)
+    except Exception as e:
+        print(f"Warning: Could not save poll_comments schedule: {e}")
+    
+    try:
+        if queue_job and queue_job.next_run_time:
+            db.set_schedule('proactive_queue', queue_job.next_run_time)
+    except Exception as e:
+        print(f"Warning: Could not save proactive_queue schedule: {e}")
     
     # Print scheduled jobs
     jobs = scheduler.get_jobs()
