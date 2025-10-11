@@ -5,6 +5,7 @@ from . import db
 from .config import config
 from .linkedin_api import LinkedInAPI
 from .proactive import enqueue_target as enqueue_target_fn
+from .scheduler import get_next_runs, run_now
 from .utils import get_istanbul_time
 
 
@@ -39,11 +40,18 @@ INDEX_TEMPLATE = """
         <h2>Status</h2>
         <div class="info"><strong>Time:</strong> {{ time }}</div>
         <div class="info"><strong>Timezone:</strong> {{ timezone }}</div>
-        <div class="info"><strong>DRY_RUN:</strong> {{ dry_run }}</div>
+        <div class=\"info\"><strong>DRY_RUN:</strong> {{ dry_run }}</div>
         <div class="info"><strong>Authenticated:</strong> {{ authenticated }}</div>
         {% if persona %}
         <div class="info"><strong>Persona:</strong> {{ persona.name }}, {{ persona.age }}, {{ persona.role }}</div>
         {% endif %}
+        <div class=\"info\"><strong>Next runs:</strong>
+            <ul>
+                <li>Daily post: {{ next_runs.get('daily_post','-') }}</li>
+                <li>Comments poll: {{ next_runs.get('poll_comments','-') }}</li>
+                <li>Proactive queue: {{ next_runs.get('proactive_queue','-') }}</li>
+            </ul>
+        </div>
     </div>
     
     <div class="status">
@@ -53,6 +61,18 @@ INDEX_TEMPLATE = """
         {% endif %}
         <a href="{{ url_for('health') }}" class="button">Health Check</a>
         <a href="{{ url_for('queue') }}" class="button">Proactive Queue</a>
+        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
+            <input type=\"hidden\" name=\"job\" value=\"daily_post\">
+            <button class=\"button\" type=\"submit\">Run Daily Post Now</button>
+        </form>
+        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
+            <input type=\"hidden\" name=\"job\" value=\"poll_comments\">
+            <button class=\"button\" type=\"submit\">Poll Comments Now</button>
+        </form>
+        <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
+            <input type=\"hidden\" name=\"job\" value=\"proactive_queue\">
+            <button class=\"button\" type=\"submit\">Process Proactive Now</button>
+        </form>
     </div>
     
     <div class="status">
@@ -68,6 +88,20 @@ INDEX_TEMPLATE = """
         {% else %}
             <div class="info">No posts yet</div>
         {% endif %}
+    </div>
+
+    <div class=\"status\">
+        <h2>Manual Share</h2>
+        <form method=\"POST\" action=\"{{ url_for('manual_post') }}\">
+            <textarea name=\"content\" rows=\"4\" placeholder=\"Write a post...\" required></textarea>
+            <button type=\"submit\" class=\"button\">Share Post</button>
+        </form>
+        <h3>Comment on a Post</h3>
+        <form method=\"POST\" action=\"{{ url_for('manual_comment') }}\">
+            <input type=\"text\" name=\"target_urn\" placeholder=\"urn:li:ugcPost:...\" required>
+            <textarea name=\"comment\" rows=\"3\" placeholder=\"Write a comment...\" required></textarea>
+            <button type=\"submit\" class=\"button\">Send Comment</button>
+        </form>
     </div>
 </body>
 </html>
@@ -166,7 +200,8 @@ def index():
             'age': config.PERSONA_AGE,
             'role': config.PERSONA_ROLE,
         },
-        posts=posts
+        posts=posts,
+        next_runs=get_next_runs(),
     )
 
 
@@ -264,6 +299,55 @@ def reject_item(item_id):
     """Reject a queue item."""
     db.reject_queue_item(item_id)
     return redirect(url_for('queue'))
+
+
+@app.route('/trigger', methods=['POST'])
+def trigger_job():
+    """Trigger a scheduled job immediately."""
+    job = request.form.get('job', '')
+    try:
+        run_now(job)
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"Error triggering job: {e}", 400
+
+
+@app.route('/manual_post', methods=['POST'])
+def manual_post():
+    """Manually share a post immediately."""
+    content = request.form.get('content', '').strip()
+    if not content:
+        return "Post content required", 400
+    if config.DRY_RUN:
+        print("[DRY_RUN] Manual post:", content[:120])
+        return redirect(url_for('index'))
+    try:
+        api = LinkedInAPI()
+        res = api.post_ugc(content)
+        post_id = res.get('id', '')
+        post_urn = res.get('urn', '')
+        db.save_post(post_id, post_urn, content, None)
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"Error posting: {e}", 400
+
+
+@app.route('/manual_comment', methods=['POST'])
+def manual_comment():
+    """Manually add a comment to a given URN."""
+    target_urn = request.form.get('target_urn', '').strip()
+    comment = request.form.get('comment', '').strip()
+    if not target_urn or not comment:
+        return "target_urn and comment required", 400
+    if config.DRY_RUN:
+        print(f"[DRY_RUN] Manual comment to {target_urn}:", comment[:120])
+        return redirect(url_for('index'))
+    try:
+        api = LinkedInAPI()
+        api.comment_on_post(target_urn, comment)
+        return redirect(url_for('index'))
+    except Exception as e:
+        return f"Error commenting: {e}", 400
 
 
 if __name__ == '__main__':

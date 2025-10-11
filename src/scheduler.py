@@ -94,6 +94,11 @@ def run_daily_post():
                 replace_existing=True
             )
             print(f"Scheduled follow-up for {run_date}")
+            # Persist follow-up schedule
+            try:
+                db.set_schedule(f'follow_up_{post_id}', run_date)
+            except Exception:
+                pass
     
     except Exception as e:
         print(f"Error in daily post job: {e}")
@@ -263,12 +268,16 @@ def schedule_daily_post():
         timezone=config.TZ
     )
     
-    scheduler.add_job(
+    job = scheduler.add_job(
         run_daily_post,
         trigger,
         id='daily_post',
         replace_existing=True
     )
+    try:
+        db.set_schedule('daily_post', job.next_run_time)
+    except Exception:
+        pass
 
 
 def start_scheduler():
@@ -293,6 +302,10 @@ def start_scheduler():
         id='poll_comments',
         replace_existing=True
     )
+    try:
+        db.set_schedule('poll_comments', scheduler.get_job('poll_comments').next_run_time)
+    except Exception:
+        pass
     
     # Process proactive queue every hour
     scheduler.add_job(
@@ -301,6 +314,10 @@ def start_scheduler():
         id='proactive_queue',
         replace_existing=True
     )
+    try:
+        db.set_schedule('proactive_queue', scheduler.get_job('proactive_queue').next_run_time)
+    except Exception:
+        pass
     
     scheduler.start()
     print("Scheduler started successfully!")
@@ -311,6 +328,37 @@ def start_scheduler():
     for job in jobs:
         print(f"  - {job.id}: {job.next_run_time}")
     print()
+
+
+def get_next_runs() -> dict:
+    """Return next run times of core jobs from the scheduler if running, else from DB."""
+    out = {}
+    try:
+        if scheduler:
+            for job_id in ['daily_post', 'poll_comments', 'proactive_queue']:
+                job = scheduler.get_job(job_id)
+                if job and job.next_run_time:
+                    out[job_id] = str(job.next_run_time)
+    except Exception:
+        pass
+    # Fallback/merge from DB
+    try:
+        for row in db.get_schedules():
+            out.setdefault(row['job_id'], str(row['next_run']))
+    except Exception:
+        pass
+    return out
+
+
+def run_now(job: str):
+    """Manually trigger a job by id."""
+    if job == 'daily_post':
+        return run_daily_post()
+    if job == 'poll_comments':
+        return poll_and_reply_comments()
+    if job == 'proactive_queue':
+        return process_proactive_queue()
+    raise ValueError(f"Unknown job: {job}")
 
 
 def stop_scheduler():

@@ -74,6 +74,16 @@ def init_db():
             approved_at TIMESTAMP
         )
     """)
+
+    # Schedules table (for displaying next run times in web UI)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schedules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT UNIQUE,
+            next_run TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
     conn.commit()
     conn.close()
@@ -306,3 +316,33 @@ def get_daily_proactive_count() -> int:
     conn.close()
     
     return row["count"] if row else 0
+
+
+# ---------------- Schedules helpers ---------------- #
+
+def set_schedule(job_id: str, next_run_dt) -> None:
+    """Upsert a schedule's next run time."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO schedules (job_id, next_run, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(job_id) DO UPDATE SET
+            next_run=excluded.next_run,
+            updated_at=excluded.updated_at
+        """,
+        (job_id, next_run_dt, datetime.now())
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_schedules() -> list:
+    """Return all schedules with job id and next run time."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT job_id, next_run FROM schedules ORDER BY job_id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
