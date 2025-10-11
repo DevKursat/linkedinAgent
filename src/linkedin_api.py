@@ -281,8 +281,30 @@ class LinkedInAPI:
         me = self.me()
         actor = f"urn:li:person:{me['id']}"
         
-        # Try new API first (v3 REST)
+        # Try new Posts comments REST endpoint first (safer and newer)
+        def _extract_post_id(urn: str) -> Optional[str]:
+            if urn.startswith("urn:li:share:") or urn.startswith("urn:li:ugcPost:"):
+                return urn.split(":")[-1]
+            return None
+
+        post_id = _extract_post_id(ugc_urn)
         payload = {"actor": actor, "message": {"text": text}}
+
+        if post_id and self._rest_allowed():
+            # Prefer v3 posts endpoint
+            try:
+                with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
+                    r = c.post(f"{API_V3_BASE}/posts/{post_id}/comments", json=payload)
+                    r.raise_for_status()
+                    comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
+                    self._mark_rest_success()
+                    return {"id": comment_id}
+            except httpx.HTTPStatusError as e:
+                print(f"New posts comment API failed for post {post_id}: {e.response.status_code} - {e.response.text}")
+            except Exception as e:
+                print(f"New posts comment API error for post {post_id}: {e}")
+
+        # If posts endpoint not available or failed, fall back to socialActions REST then legacy
         versions_to_try = self._rest_versions() if self._rest_allowed() else []
         tried_versions: List[str] = []
         while versions_to_try:
@@ -348,11 +370,20 @@ class LinkedInAPI:
         me = self.me()
         actor = f"urn:li:person:{me['id']}"
         payload = {"actor": actor}
-        endpoint = f"{API_BASE}/socialActions/{self._encode_urn_for_path(target_urn)}/likes"
-
-        with httpx.Client(timeout=30, headers=self._headers()) as c:
-            r = c.post(endpoint, json=payload)
-            r.raise_for_status()
+        # Prefer REST v3 socialActions likes endpoint
+        encoded = self._encode_urn_for_path(target_urn)
+        try:
+            with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
+                r = c.post(f"{API_V3_BASE}/socialActions/{encoded}/likes", json=payload)
+                r.raise_for_status()
+                self._mark_rest_success()
+                return
+        except Exception:
+            # Fallback to legacy v2 endpoint
+            endpoint = f"{API_BASE}/socialActions/{encoded}/likes"
+            with httpx.Client(timeout=30, headers=self._headers()) as c:
+                r = c.post(endpoint, json=payload)
+                r.raise_for_status()
 
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
@@ -367,10 +398,10 @@ class LinkedInAPI:
 
         post_id = extract_post_id(social_urn)
         if post_id:
-            # Try new posts API endpoint first
+            # Try new Posts REST endpoint under /rest first
             try:
-                with httpx.Client(timeout=30, headers=self._headers()) as c:
-                    r = c.get(f"{API_BASE}/posts/{post_id}/comments", params={"count": count})
+                with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
+                    r = c.get(f"{API_V3_BASE}/posts/{post_id}/comments", params={"count": count})
                     r.raise_for_status()
                     data = r.json()
                     elements = data.get("elements", [])
@@ -382,9 +413,12 @@ class LinkedInAPI:
                             "message": {"text": e.get("message", {}).get("text", "")},
                             "created": e.get("createdAt", e.get("created", {}).get("time", 0)),
                         })
+                    self._mark_rest_success()
                     return out
+            except httpx.HTTPStatusError as e:
+                print(f"New posts comments API v3 failed for post {post_id}: {e.response.status_code} - {e.response.text}")
             except Exception as e:
-                print(f"New posts comments API failed for post {post_id}: {e}")
+                print(f"New posts comments API error for post {post_id}: {e}")
 
         # Try modern REST API first to avoid 400 errors for share URNs.
         versions_to_try = self._rest_versions() if self._rest_allowed() else []
