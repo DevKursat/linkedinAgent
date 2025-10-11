@@ -69,6 +69,8 @@ INDEX_TEMPLATE = """
         <h2>Actions</h2>
         {% if not authenticated %}
         <a href="{{ url_for('login') }}" class="button">Login with LinkedIn</a>
+        {% else %}
+        <a href="{{ url_for('logout') }}" class="button" style="background: #dc3545;">Logout</a>
         {% endif %}
         <a href="{{ url_for('health') }}" class="button">Health Check</a>
     <a href="{{ url_for('diagnostics') }}" class="button">Diagnostics</a>
@@ -266,6 +268,15 @@ def callback():
         return redirect(url_for('index'))
     except Exception as e:
         return f"Error exchanging code for token: {e}", 500
+
+
+@app.route('/logout')
+def logout():
+    """Logout: delete token and clear session."""
+    db.delete_token()
+    session.clear()
+    flash("Logged out successfully", 'success')
+    return redirect(url_for('index'))
 
 
 @app.route('/queue')

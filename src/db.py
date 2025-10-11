@@ -123,6 +123,15 @@ def get_token() -> Optional[Dict[str, Any]]:
     return None
 
 
+def delete_token():
+    """Delete current LinkedIn access token (logout)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM tokens")
+    conn.commit()
+    conn.close()
+
+
 def save_post(post_id: str, post_urn: str, content: str, source_url: Optional[str] = None):
     """Save posted content."""
     conn = get_connection()
