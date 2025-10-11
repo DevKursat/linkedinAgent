@@ -1,5 +1,6 @@
 """LinkedIn API integration."""
 import time
+import re
 import httpx
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlencode
@@ -17,6 +18,31 @@ class LinkedInAPI:
         self.redirect_uri = config.LINKEDIN_REDIRECT_URI
         self.scopes = config.LINKEDIN_SCOPES.split()
         self._me_cache: Optional[Dict[str, Any]] = None
+
+    def _rest_versions(self) -> List[str]:
+        versions: List[str] = []
+        primary = (config.LINKEDIN_REST_VERSION or "").strip()
+        if primary:
+            versions.append(primary)
+        fallbacks = [v.strip() for v in (config.LINKEDIN_REST_VERSION_FALLBACKS or "").split(",") if v.strip()]
+        for v in fallbacks:
+            if v not in versions:
+                versions.append(v)
+        # Ensure we always try at least one default if nothing configured
+        if not versions:
+            versions.append("202405")
+        return versions
+
+    def _extract_versions_from_error(self, error_text: str) -> List[str]:
+        """Extract possible version strings from LinkedIn 426 error messages."""
+        if not error_text:
+            return []
+        found = set()
+        for match in re.findall(r"20\d{4,6}", error_text):
+            found.add(match)
+            if len(match) == 8:
+                found.add(match[:6])
+        return [v for v in found if v]
 
     # URLs and OAuth
     def get_authorization_url(self, state: str) -> str:
@@ -68,14 +94,16 @@ class LinkedInAPI:
             "Content-Type": "application/json",
         }
 
-    def _headers_v3(self) -> Dict[str, str]:
+    def _headers_v3(self, version: Optional[str] = None) -> Dict[str, str]:
         """Headers for LinkedIn API v3 (REST API)."""
         token = self._get_token()
         if not token:
             raise RuntimeError("LinkedIn not authenticated")
+        version = (version or config.LINKEDIN_REST_VERSION).strip()
         return {
             "Authorization": f"Bearer {token}",
-            "LinkedIn-Version": "202405",  # API version
+            # Keep LinkedIn-Version fresh; LinkedIn rejects stale versions with HTTP 426.
+            "LinkedIn-Version": version,
             "Content-Type": "application/json",
             "X-Restli-Protocol-Version": "2.0.0",
         }
@@ -135,28 +163,41 @@ class LinkedInAPI:
             "isReshareDisabledByAuthor": False
         }
         
-        # Try new v3 REST API first
-        try:
-            with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
-                r = c.post(f"{API_V3_BASE}/posts", json=payload)
-                r.raise_for_status()
-                response_data = r.json()
-                post_id = response_data.get("id", "")
-                
-                # Extract URN from response
-                if post_id:
-                    # New API returns full URN or just ID
-                    if post_id.startswith("urn:"):
-                        urn = post_id
-                        post_id = post_id.split(":")[-1]
-                    else:
-                        urn = f"urn:li:share:{post_id}"
+        # Try new v3 REST API first with version fallbacks
+        versions_to_try = self._rest_versions()
+        tried_versions: List[str] = []
+        while versions_to_try:
+            version = versions_to_try.pop(0)
+            if version in tried_versions:
+                continue
+            tried_versions.append(version)
+            try:
+                with httpx.Client(timeout=30, headers=self._headers_v3(version)) as c:
+                    r = c.post(f"{API_V3_BASE}/posts", json=payload)
+                    r.raise_for_status()
+                    response_data = r.json()
+                    post_id = response_data.get("id", "")
                     
-                    return {"id": post_id, "urn": urn}
-        except httpx.HTTPStatusError as e:
-            print(f"API v3 failed: {e.response.status_code} - {e.response.text}")
-            # Fallback to old UGC API
-            pass
+                    # Extract URN from response
+                    if post_id:
+                        # New API returns full URN or just ID
+                        if post_id.startswith("urn:"):
+                            urn = post_id
+                            post_id = post_id.split(":")[-1]
+                        else:
+                            urn = f"urn:li:share:{post_id}"
+                        
+                        return {"id": post_id, "urn": urn}
+            except httpx.HTTPStatusError as e:
+                print(f"API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
+                if e.response.status_code == 426:
+                    for candidate_version in self._extract_versions_from_error(e.response.text):
+                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                            versions_to_try.append(candidate_version)
+                continue
+            except Exception as e:
+                print(f"API v3 error (version {version}): {e}")
+                continue
         
         # Fallback: Try old ugcPosts API (might still work for some apps)
         payload_v2 = {
@@ -190,25 +231,36 @@ class LinkedInAPI:
         actor = f"urn:li:person:{me['id']}"
         
         # Try new API first (v3 REST)
-        try:
-            payload = {
-                "actor": actor,
-                "message": {"text": text}
-            }
-            with httpx.Client(timeout=30, headers=self._headers_v3()) as c:
-                # New endpoint format
-                r = c.post(f"{API_V3_BASE}/socialActions/{ugc_urn}/comments", json=payload)
-                r.raise_for_status()
-                comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
-                return {"id": comment_id}
-        except httpx.HTTPStatusError as e:
-            print(f"Comment API v3 failed: {e.response.status_code} - {e.response.text}")
-            # Fallback to v2
-            pass
+        payload = {"actor": actor, "message": {"text": text}}
+        versions_to_try = self._rest_versions()
+        tried_versions: List[str] = []
+        while versions_to_try:
+            version = versions_to_try.pop(0)
+            if version in tried_versions:
+                continue
+            tried_versions.append(version)
+            try:
+                with httpx.Client(timeout=30, headers=self._headers_v3(version)) as c:
+                    r = c.post(f"{API_V3_BASE}/socialActions/{ugc_urn}/comments", json=payload)
+                    r.raise_for_status()
+                    comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
+                    return {"id": comment_id}
+            except httpx.HTTPStatusError as e:
+                print(f"Comment API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
+                if e.response.status_code == 426:
+                    for candidate_version in self._extract_versions_from_error(e.response.text):
+                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                            versions_to_try.append(candidate_version)
+                continue
+            except Exception as e:
+                print(f"Comment API v3 error (version {version}): {e}")
+                continue
         
         # Fallback to old API
-        payload = {"actor": actor, "message": {"text": text}}
-        endpoint = f"{API_BASE}/socialActions/{ugc_urn}/comments"
+        legacy_urn = ugc_urn
+        if legacy_urn.startswith("urn:li:share:"):
+            legacy_urn = legacy_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1)
+        endpoint = f"{API_BASE}/socialActions/{legacy_urn}/comments"
         with httpx.Client(timeout=30, headers=self._headers()) as c:
             r = c.post(endpoint, json=payload)
             r.raise_for_status()
@@ -216,8 +268,51 @@ class LinkedInAPI:
             return {"id": comment_id}
 
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
-        social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:ugcPost:{ugc_urn}"
-        endpoint = f"{API_BASE}/socialActions/{social_urn}/comments"
+        social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
+
+        # Try modern REST API first to avoid 400 errors for share URNs.
+        versions_to_try = self._rest_versions()
+        tried_versions: List[str] = []
+        while versions_to_try:
+            version = versions_to_try.pop(0)
+            if version in tried_versions:
+                continue
+            tried_versions.append(version)
+            try:
+                with httpx.Client(timeout=30, headers=self._headers_v3(version)) as c:
+                    r = c.get(
+                        f"{API_V3_BASE}/socialActions/{social_urn}/comments",
+                        params={"count": count},
+                    )
+                    r.raise_for_status()
+                    data = r.json()
+                    elements = data.get("elements", [])
+                    out: List[Dict[str, Any]] = []
+                    for e in elements:
+                        out.append({
+                            "id": e.get("id", "") or e.get("entityUrn", "").split(":")[-1],
+                            "actor": e.get("actor"),
+                            "message": {"text": e.get("message", {}).get("text", "")},
+                            "created": e.get("createdAt", e.get("created", {}).get("time", 0)),
+                        })
+                    return out
+            except httpx.HTTPStatusError as e:
+                print(f"List comments API v3 failed (version {version}): {e.response.status_code} - {e.response.text}")
+                if e.response.status_code == 426:
+                    for candidate_version in self._extract_versions_from_error(e.response.text):
+                        if candidate_version not in tried_versions and candidate_version not in versions_to_try:
+                            versions_to_try.append(candidate_version)
+                continue
+            except Exception as e:
+                print(f"List comments API v3 error (version {version}): {e}")
+                continue
+
+        # Legacy fallback for older posts/permissions
+        legacy_urn = social_urn
+        if legacy_urn.startswith("urn:li:share:"):
+            legacy_urn = legacy_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1)
+
+        endpoint = f"{API_BASE}/socialActions/{legacy_urn}/comments"
         with httpx.Client(timeout=30, headers=self._headers()) as c:
             r = c.get(endpoint, params={"count": count})
             r.raise_for_status()

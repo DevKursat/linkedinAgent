@@ -23,7 +23,15 @@ def suggest_comment(post_content: str, context: str) -> str:
     """Suggest a comment for a target post."""
     try:
         prompt = generate_proactive_comment_prompt(post_content, context)
-        suggestion = generate_text(prompt, temperature=0.7, max_tokens=150)
+        suggestion = generate_text(prompt, temperature=0.7).strip()
+        if suggestion:
+            return suggestion
+        # Retry once with an explicit brevity hint if the first response was empty.
+        retry_prompt = (
+            prompt
+            + "\n\nGive a concise 2-sentence LinkedIn comment that adds value to the discussion."
+        )
+        suggestion = generate_text(retry_prompt, temperature=0.6).strip()
         return suggestion
     except Exception as e:
         print(f"Error suggesting comment: {e}")

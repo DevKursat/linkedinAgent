@@ -41,7 +41,7 @@ def run_daily_post():
             article['link']
         )
         
-        post_text = generate_text(prompt, temperature=0.8, max_tokens=400)
+        post_text = generate_text(prompt, temperature=0.8)
         print(f"\nGenerated post:\n{post_text}\n")
         
         # Check moderation
@@ -57,7 +57,7 @@ def run_daily_post():
             article['link'],
             source_display_name
         )
-        turkish_summary = generate_text(summary_prompt, temperature=0.7, max_tokens=200)
+        turkish_summary = generate_text(summary_prompt, temperature=0.7)
         print(f"\nGenerated Turkish summary:\n{turkish_summary}\n")
         
         if config.DRY_RUN:
@@ -111,6 +111,14 @@ def run_daily_post():
                 db.set_schedule(f'follow_up_{post_id}', run_date)
             except Exception:
                 pass
+        else:
+            # Web panel tetiklemelerinde scheduler yoksa yorumu hemen gönder.
+            print("Scheduler aktif değil; takip yorumunu hemen paylaşıyorum.")
+            try:
+                time.sleep(2)
+            except Exception:
+                pass
+            post_follow_up()
     
     except Exception as e:
         print(f"Error in daily post job: {e}")

@@ -14,10 +14,14 @@ class Config:
     LINKEDIN_REDIRECT_URI: str = os.getenv("LINKEDIN_REDIRECT_URI", "http://localhost:5000/callback")
     # Varsayılanı OIDC + w_member_social yapıyoruz
     LINKEDIN_SCOPES: str = os.getenv("LINKEDIN_SCOPES", "w_member_social openid profile email")
+    LINKEDIN_REST_VERSION: str = os.getenv("LINKEDIN_REST_VERSION", "202409")
+    LINKEDIN_REST_VERSION_FALLBACKS: str = os.getenv("LINKEDIN_REST_VERSION_FALLBACKS", "202407,202405")
 
     # Google Gemini
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    GEMINI_MAX_OUTPUT_TOKENS: int = int(os.getenv("GEMINI_MAX_OUTPUT_TOKENS", "4096"))
+    GEMINI_RETRY_STEP: int = int(os.getenv("GEMINI_RETRY_STEP", "600"))
 
     # General
     TZ: str = os.getenv("TZ", "Europe/Istanbul")
