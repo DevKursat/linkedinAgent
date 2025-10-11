@@ -73,9 +73,11 @@ Output only the post text, nothing else.
 """
 
 
-def generate_turkish_summary_prompt(post_content: str, source_url: str) -> str:
+def generate_turkish_summary_prompt(post_content: str, source_url: str, source_name: str = "") -> str:
     """Generate prompt for Turkish summary comment."""
     persona = get_persona_context()
+    
+    source_display = f"{source_name}: {source_url}" if source_name else source_url
     
     return f"""{persona}
 
@@ -84,13 +86,13 @@ You just posted this on LinkedIn:
 
 Now write a follow-up comment in Turkish that:
 - Summarizes the key point in 1-2 sentences
-- Includes the source URL: {source_url}
+- Includes the source reference: {source_display}
 - Sounds natural and conversational
 
 Format:
 [Your Turkish summary in 1-2 sentences]
 
-Kaynak: {source_url}
+Kaynak: {source_display}
 
 Output only the comment text, nothing else.
 """

@@ -14,7 +14,7 @@ from .generator import generate_post_prompt, generate_turkish_summary_prompt
 from .moderation import should_post_content
 from .commenter import generate_reply
 from .proactive import get_approved_targets, mark_posted
-from .utils import get_istanbul_time, get_random_post_time, get_reply_delay_seconds
+from .utils import get_istanbul_time, get_random_post_time, get_reply_delay_seconds, format_source_name
 
 
 scheduler = None
@@ -51,7 +51,12 @@ def run_daily_post():
             return
         
         # Generate Turkish summary for follow-up
-        summary_prompt = generate_turkish_summary_prompt(post_text, article['link'])
+        source_display_name = format_source_name(article['source'])
+        summary_prompt = generate_turkish_summary_prompt(
+            post_text, 
+            article['link'],
+            source_display_name
+        )
         turkish_summary = generate_text(summary_prompt, temperature=0.7, max_tokens=200)
         print(f"\nGenerated Turkish summary:\n{turkish_summary}\n")
         
