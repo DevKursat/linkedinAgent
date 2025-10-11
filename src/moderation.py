@@ -21,8 +21,9 @@ CRYPTO_KEYWORDS = [
 
 # Sensitive topics that require approval
 SENSITIVE_KEYWORDS = [
-    "war", "conflict", "military", "weapon", "terrorism", "racist", "sexist",
+    "war", "military", "weapon", "terrorism", "racist", "sexist",
     "religion", "religious", "islam", "christian", "jewish", "hindu", "buddhist",
+    "holy war", "sectarian",  # keep explicit religious conflict terms
     "savaş", "silah", "terör", "din", "dini", "战争", "武器", "宗教",
 ]
 
