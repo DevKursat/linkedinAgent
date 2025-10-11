@@ -3,7 +3,7 @@ import time
 import re
 import httpx
 from typing import Dict, Any, List, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
 from .config import config
 from . import db
 
@@ -107,6 +107,11 @@ class LinkedInAPI:
             "Content-Type": "application/json",
             "X-Restli-Protocol-Version": "2.0.0",
         }
+
+    @staticmethod
+    def _encode_urn_for_path(urn: str) -> str:
+        """Percent-encode a URN to safely use it inside REST path segments."""
+        return quote(urn, safe="")
 
     def userinfo(self) -> Dict[str, Any]:
         # OIDC userinfo (openid/profile/email)
@@ -240,8 +245,9 @@ class LinkedInAPI:
                 continue
             tried_versions.append(version)
             try:
+                encoded = self._encode_urn_for_path(ugc_urn)
                 with httpx.Client(timeout=30, headers=self._headers_v3(version)) as c:
-                    r = c.post(f"{API_V3_BASE}/socialActions/{ugc_urn}/comments", json=payload)
+                    r = c.post(f"{API_V3_BASE}/socialActions/{encoded}/comments", json=payload)
                     r.raise_for_status()
                     comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
                     return {"id": comment_id}
@@ -257,15 +263,30 @@ class LinkedInAPI:
                 continue
         
         # Fallback to old API
-        legacy_urn = ugc_urn
-        if legacy_urn.startswith("urn:li:share:"):
-            legacy_urn = legacy_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1)
-        endpoint = f"{API_BASE}/socialActions/{legacy_urn}/comments"
-        with httpx.Client(timeout=30, headers=self._headers()) as c:
-            r = c.post(endpoint, json=payload)
-            r.raise_for_status()
-            comment_id = r.headers.get("x-restli-id", "")
-            return {"id": comment_id}
+        legacy_variants = [ugc_urn]
+        if ugc_urn.startswith("urn:li:share:"):
+            legacy_variants.append(ugc_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1))
+        elif ugc_urn.startswith("urn:li:ugcPost:"):
+            legacy_variants.append(ugc_urn.replace("urn:li:ugcPost:", "urn:li:share:", 1))
+
+        last_error: Optional[Exception] = None
+        for legacy_urn in legacy_variants:
+            endpoint = f"{API_BASE}/socialActions/{self._encode_urn_for_path(legacy_urn)}/comments"
+            try:
+                with httpx.Client(timeout=30, headers=self._headers()) as c:
+                    r = c.post(endpoint, json=payload)
+                    r.raise_for_status()
+                    comment_id = r.json().get("id", "") or r.headers.get("x-restli-id", "")
+                    return {"id": comment_id}
+            except Exception as exc:
+                print(f"Legacy comment API failed for {legacy_urn}: {exc}")
+                last_error = exc
+                continue
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError("LinkedIn comment API fallback exhausted without success")
 
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
@@ -279,9 +300,10 @@ class LinkedInAPI:
                 continue
             tried_versions.append(version)
             try:
+                encoded = self._encode_urn_for_path(social_urn)
                 with httpx.Client(timeout=30, headers=self._headers_v3(version)) as c:
                     r = c.get(
-                        f"{API_V3_BASE}/socialActions/{social_urn}/comments",
+                        f"{API_V3_BASE}/socialActions/{encoded}/comments",
                         params={"count": count},
                     )
                     r.raise_for_status()
@@ -308,25 +330,39 @@ class LinkedInAPI:
                 continue
 
         # Legacy fallback for older posts/permissions
-        legacy_urn = social_urn
-        if legacy_urn.startswith("urn:li:share:"):
-            legacy_urn = legacy_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1)
+        legacy_variants = [social_urn]
+        if social_urn.startswith("urn:li:share:"):
+            legacy_variants.append(social_urn.replace("urn:li:share:", "urn:li:ugcPost:", 1))
+        elif social_urn.startswith("urn:li:ugcPost:"):
+            legacy_variants.append(social_urn.replace("urn:li:ugcPost:", "urn:li:share:", 1))
 
-        endpoint = f"{API_BASE}/socialActions/{legacy_urn}/comments"
-        with httpx.Client(timeout=30, headers=self._headers()) as c:
-            r = c.get(endpoint, params={"count": count})
-            r.raise_for_status()
-            data = r.json()
-            elements = data.get("elements", [])
-            out: List[Dict[str, Any]] = []
-            for e in elements:
-                out.append({
-                    "id": e.get("entityUrn", "").split(":")[-1],
-                    "actor": e.get("actor"),
-                    "message": {"text": e.get("message", {}).get("text", "")},
-                    "created": e.get("created", {}).get("time", 0),
-                })
-            return out
+        last_error: Optional[Exception] = None
+        for legacy_urn in legacy_variants:
+            endpoint = f"{API_BASE}/socialActions/{self._encode_urn_for_path(legacy_urn)}/comments"
+            try:
+                with httpx.Client(timeout=30, headers=self._headers()) as c:
+                    r = c.get(endpoint, params={"count": count})
+                    r.raise_for_status()
+                    data = r.json()
+                    elements = data.get("elements", [])
+                    out: List[Dict[str, Any]] = []
+                    for e in elements:
+                        out.append({
+                            "id": e.get("id", "") or e.get("entityUrn", "").split(":")[-1],
+                            "actor": e.get("actor"),
+                            "message": {"text": e.get("message", {}).get("text", "")},
+                            "created": e.get("createdAt", e.get("created", {}).get("time", 0)),
+                        })
+                    return out
+            except Exception as exc:
+                print(f"Legacy list comments API failed for {legacy_urn}: {exc}")
+                last_error = exc
+                continue
+
+        if last_error:
+            raise last_error
+
+        return []
 
 
 _api_singleton: Optional[LinkedInAPI] = None
