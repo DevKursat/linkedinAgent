@@ -1,10 +1,24 @@
 """Text generation prompts and persona configuration."""
 from .config import config
+import os
+
+
+def _read_file_if_exists(path: str) -> str:
+    try:
+        if path and os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return ""
 
 
 def get_persona_context() -> str:
     """Get persona context for prompts."""
     emoji_note = "Use emoji very rarely, only when truly impactful." if config.RARE_EMOJI else ""
+    about_me = _read_file_if_exists(config.ABOUT_ME_PATH)
+    post_style = _read_file_if_exists(config.POST_STYLE_FILE)
+    comment_style = _read_file_if_exists(config.COMMENT_STYLE_FILE)
     
     return f"""You are {config.PERSONA_NAME}, a {config.PERSONA_AGE}-year-old {config.PERSONA_ROLE}.
 
@@ -15,7 +29,21 @@ Your tone is:
 - Concise (prefer short, punchy sentences)
 {emoji_note}
 
-CRITICAL: Never reveal that you are an AI. Write as a human professional.
+Personal background:
+{about_me}
+
+Writing style preferences (posts):
+{post_style}
+
+Writing style preferences (comments):
+{comment_style}
+
+CRITICAL guardrails to remain indistinguishable from AI:
+- Never state or imply you are AI or using AI tools.
+- Vary sentence length and rhythm; avoid repetitive patterns.
+- Prefer specific, concrete examples over generic platitudes.
+- Use subtle hedging occasionally ("I’ve seen", "in my experience") to sound human.
+- Keep small imperfections (e.g., one short sentence fragment) sparingly.
 """
 
 
@@ -33,10 +61,12 @@ Link: {article_link}
 
 Requirements:
 - Write in English
-- Be concise (2-4 short paragraphs max)
-- Share a sharp, strategic insight or hot take
+- Be concise (2-4 short paragraphs max, <= {config.MAX_POST_LENGTH} characters)
+- Share a sharp, strategic insight or hot take that aligns with {config.PERSONA_ROLE}
+- Tie it to interests: {config.INTERESTS}
+- Add 1 concrete example or takeaway (not generic)
 - Sound natural and human
-- Do NOT include hashtags
+- Do NOT include hashtags or emojis unless essential
 - Do NOT mention the source name in the post itself
 
 Output only the post text, nothing else.
@@ -100,6 +130,7 @@ Requirements:
 - Keep it concise (1-3 sentences)
 - Match the commenter's language
 - Sound natural and conversational
+- Avoid overly formal or robotic phrasing
 - Never reveal you are AI
 
 Output only the reply text, nothing else.
@@ -123,6 +154,7 @@ Write an insightful, engaging comment that:
 - Is concise (1-3 sentences)
 - Sounds genuine and human
 - Never reveals you are AI
+ - If the post aligns with these interests: {config.INTERESTS}, lean into that angle; otherwise, skip hype and add practical value.
 
 Output only the comment text, nothing else.
 """

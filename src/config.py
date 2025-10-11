@@ -41,6 +41,14 @@ class Config:
     # Database
     DB_PATH: str = os.getenv("DB_PATH", "./data/bot.db")
 
+    # Personalization & interests
+    INTERESTS: str = os.getenv("INTERESTS", "ai,llm,product,saas,startup,founder,ux,devtools,infra")
+    ABOUT_ME_PATH: str = os.getenv("ABOUT_ME_PATH", "./data/about_me.md")
+    POST_STYLE_FILE: str = os.getenv("POST_STYLE_FILE", "./data/style.md")
+    COMMENT_STYLE_FILE: str = os.getenv("COMMENT_STYLE_FILE", "./data/style_comment.md")
+    AB_TESTING: bool = os.getenv("AB_TESTING", "true").lower() == "true"
+    MAX_POST_LENGTH: int = int(os.getenv("MAX_POST_LENGTH", "1200"))
+
 
 # Export a single config instance
 config = Config()

@@ -7,6 +7,7 @@ from .linkedin_api import LinkedInAPI
 from .proactive import enqueue_target as enqueue_target_fn
 from .scheduler import get_next_runs, run_now
 from .utils import get_istanbul_time
+from .proactive import discover_and_enqueue
 
 
 app = Flask(__name__)
@@ -61,6 +62,9 @@ INDEX_TEMPLATE = """
         {% endif %}
         <a href="{{ url_for('health') }}" class="button">Health Check</a>
         <a href="{{ url_for('queue') }}" class="button">Proactive Queue</a>
+        <form method="POST" action="{{ url_for('discover') }}" style="display:inline;">
+            <button class="button" type="submit">Discover Relevant Posts</button>
+        </form>
         <form method=\"POST\" action=\"{{ url_for('trigger_job') }}\" style=\"display:inline;\">
             <input type=\"hidden\" name=\"job\" value=\"daily_post\">
             <button class=\"button\" type=\"submit\">Run Daily Post Now</button>
@@ -286,6 +290,15 @@ def enqueue_target_route():
     
     return redirect(url_for('queue'))
 
+
+@app.route('/discover', methods=['POST'])
+def discover():
+    """Discover relevant posts by interests and enqueue suggestions."""
+    try:
+        discover_and_enqueue(limit=3)
+        return redirect(url_for('queue'))
+    except Exception as e:
+        return f"Error during discovery: {e}", 400
 
 @app.route('/approve/<int:item_id>', methods=['POST'])
 def approve_item(item_id):
