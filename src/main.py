@@ -10,6 +10,7 @@ from .utils import get_istanbul_time
 from .proactive import discover_and_enqueue
 from .gemini import generate_text
 from .generator import generate_refine_post_prompt
+from .diagnostics import doctor as diag_doctor
 
 
 app = Flask(__name__)
@@ -70,6 +71,7 @@ INDEX_TEMPLATE = """
         <a href="{{ url_for('login') }}" class="button">Login with LinkedIn</a>
         {% endif %}
         <a href="{{ url_for('health') }}" class="button">Health Check</a>
+    <a href="{{ url_for('diagnostics') }}" class="button">Diagnostics</a>
         <a href="{{ url_for('queue') }}" class="button">Proactive Queue</a>
         <form method="POST" action="{{ url_for('discover') }}" style="display:inline;">
             <button class="button" type="submit">Discover Relevant Posts</button>
@@ -312,6 +314,11 @@ def discover():
         return redirect(url_for('queue'))
     except Exception as e:
         return f"Error during discovery: {e}", 400
+
+@app.route('/diagnostics')
+def diagnostics():
+    """Return environment and auth diagnostics as JSON."""
+    return jsonify(diag_doctor()), 200
 
 @app.route('/approve/<int:item_id>', methods=['POST'])
 def approve_item(item_id):
