@@ -28,6 +28,7 @@ def generate_text(
     temperature: float = 0.7,
     max_tokens: int = 1000,
     _attempt: int = 0,
+    _force_concise: bool = False,
 ) -> str:
     """Generate text using Gemini with robust error handling."""
     # Fallback for environments without API key (useful for DRY_RUN demos/tests)
@@ -66,8 +67,16 @@ def generate_text(
             },
         ]
         
+        effective_prompt = prompt
+        if _force_concise:
+            effective_prompt = (
+                prompt
+                + "\n\nIMPORTANT: Keep the final response under 180 words. Be direct, avoid repetition, and do not add disclaimers."
+            )
+            print("Gemini retry enforcing concise response (<=180 words).")
+
         response = model.generate_content(
-            prompt,
+            effective_prompt,
             generation_config=generation_config,
             safety_settings=safety_settings
         )
@@ -159,10 +168,11 @@ def generate_text(
         # Retry automatically if response was truncated
         if (
             (finish_reason_label == "MAX_TOKENS" or finish_reason_value == 2)
-            and _attempt < 2
-            and max_tokens < 2048
+            and _attempt < 3
+            and max_tokens < 3072
         ):
-            new_max_tokens = min(max_tokens + 400, 2048)
+            new_max_tokens = min(max_tokens + 600, 3072)
+            next_force_concise = _force_concise or (_attempt >= 1)
             if new_max_tokens > max_tokens:
                 print(
                     "Gemini response truncated (finish_reason=MAX_TOKENS). "
@@ -173,6 +183,7 @@ def generate_text(
                     temperature=temperature,
                     max_tokens=new_max_tokens,
                     _attempt=_attempt + 1,
+                    _force_concise=next_force_concise,
                 )
         
         raise ValueError(
