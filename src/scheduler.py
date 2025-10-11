@@ -84,6 +84,13 @@ def run_daily_post():
         
         # Save to database
         db.save_post(post_id, post_urn, post_text, article['link'])
+
+        # Like the post to ensure it appears as engaged content
+        try:
+            api.like_post(post_urn)
+            print("Post liked successfully")
+        except Exception as like_err:
+            print(f"Warning: Failed to like post {post_urn}: {like_err}")
         
         # Schedule follow-up comment after 66 seconds
         def post_follow_up():

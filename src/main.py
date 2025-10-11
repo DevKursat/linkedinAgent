@@ -430,6 +430,10 @@ def manual_post():
         if not post_id and not post_urn:
             raise RuntimeError("LinkedIn API gönderi id/urn döndürmedi")
         db.save_post(post_id, post_urn, content, None)
+        try:
+            api.like_post(post_urn)
+        except Exception as like_err:
+            print(f"[WARN] Gönderiyi beğenemedi: {like_err}")
         flash("Gönderi başarıyla paylaşıldı", 'success')
         return redirect(url_for('index'))
     except Exception as e:

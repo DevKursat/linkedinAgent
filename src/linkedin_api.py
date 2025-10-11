@@ -340,6 +340,20 @@ class LinkedInAPI:
 
         raise RuntimeError("LinkedIn comment API fallback exhausted without success")
 
+    def like_post(self, target_urn: str) -> None:
+        """Add a like to the given post URN using the stable v2 endpoint."""
+        if not target_urn.startswith("urn:" ):
+            target_urn = f"urn:li:share:{target_urn}"
+
+        me = self.me()
+        actor = f"urn:li:person:{me['id']}"
+        payload = {"actor": actor}
+        endpoint = f"{API_BASE}/socialActions/{self._encode_urn_for_path(target_urn)}/likes"
+
+        with httpx.Client(timeout=30, headers=self._headers()) as c:
+            r = c.post(endpoint, json=payload)
+            r.raise_for_status()
+
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
 
