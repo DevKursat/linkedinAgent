@@ -12,10 +12,14 @@ __pycache__/
 *.pyo
 
 # Database files
-data/
-*.db
+data/*.db
 *.sqlite
 *.sqlite3
+
+# Keep personal style docs tracked
+!data/about_me.md
+!data/style.md
+!data/style_comment.md
 
 # OS files
 .DS_Store

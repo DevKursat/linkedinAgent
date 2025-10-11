@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  worker:
+    image: ghcr.io/devkursat/linkedinagent:main
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/devkursat/linkedinagent:main
+    ports:
+      - "5000:5000"
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - worker
+    restart: unless-stopped

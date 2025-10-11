@@ -9,6 +9,8 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 - **Smart Commenting**: Auto-replies in commenter's language with appropriate tone
 - **Turkish Follow-ups**: Adds Turkish summary 66 seconds after each post
 - **Proactive Queue**: Web UI to manage comments on others' posts
+- **Personalized Voice**: Injects your about/style docs so it writes exactly like you
+- **Interest-aware Discovery**: Finds posts matching your INTERESTS for proactive engagement
 - **Content Moderation**: Blocks politics and speculative crypto, flags sensitive topics
 - **Time-aware**: Respects Istanbul timezone and peak posting windows
 
@@ -38,6 +40,8 @@ Edit `.env` and fill in your credentials:
 - `LINKEDIN_CLIENT_SECRET` - From LinkedIn Developer App
 - `GOOGLE_API_KEY` - From Google AI Studio
 - `LINKEDIN_REDIRECT_URI` - Keep as `http://localhost:5000/callback` for local development
+- `INTERESTS` - Comma-separated keywords to bias discovery and writing (e.g., `ai,llm,product`)
+- `ABOUT_ME_PATH`, `POST_STYLE_FILE`, `COMMENT_STYLE_FILE` - Paths to your style docs
 
 **Important**: Ensure `DRY_RUN=true` for initial testing!
 
@@ -88,6 +92,10 @@ docker compose restart worker
 - `/enqueue_target` - Add target (POST)
 - `/approve/<id>` - Approve queue item (POST)
 - `/reject/<id>` - Reject queue item (POST)
+- `/trigger` - Run a job now (POST)
+- `/discover` - Discover relevant posts into proactive queue (POST)
+- `/manual_post` - Manually share a post (POST)
+- `/manual_comment` - Manually comment on a post (POST)
 
 ### Scheduler Jobs
 
@@ -111,6 +119,11 @@ All settings in `.env`:
 | `PERSONA_NAME` | `Kürşat` | Bot persona name |
 | `PERSONA_AGE` | `21` | Bot persona age |
 | `PERSONA_ROLE` | `Product Builder` | Bot persona role |
+| `INTERESTS` | `ai,llm,product,saas,startup,founder,ux,devtools,infra` | Discovery and bias |
+| `ABOUT_ME_PATH` | `./data/about_me.md` | Personal bio file |
+| `POST_STYLE_FILE` | `./data/style.md` | Post style file |
+| `COMMENT_STYLE_FILE` | `./data/style_comment.md` | Comment style file |
+| `MAX_POST_LENGTH` | `1200` | Character cap for posts |
 | `BLOCK_POLITICS` | `true` | Block political content |
 | `BLOCK_SPECULATIVE_CRYPTO` | `true` | Block crypto speculation |
 
@@ -200,6 +213,20 @@ python3 test_installation.py
 Expected output: All 6 tests should pass.
 
 See [VERIFICATION.md](VERIFICATION.md) for detailed implementation verification and acceptance criteria.
+
+## Deploying with GitHub Actions and GHCR
+
+On push to `main`:
+- CI runs installation tests
+- Docker image is built and pushed to GitHub Container Registry (GHCR)
+
+Run in production using GHCR image:
+
+```bash
+cp .env.example .env
+# fill secrets
+docker compose -f docker-compose.prod.yml up -d
+```
 
 ## Contributing
 
