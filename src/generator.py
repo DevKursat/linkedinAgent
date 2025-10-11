@@ -158,3 +158,25 @@ Write an insightful, engaging comment that:
 
 Output only the comment text, nothing else.
 """
+
+
+def generate_refine_post_prompt(draft_text: str, language: str = "English") -> str:
+    """Generate a prompt to refine/improve a user's draft post in their voice."""
+    persona = get_persona_context()
+    return f"""{persona}
+
+You are editing and improving a LinkedIn post draft. Keep the author's voice, improve clarity, tighten wording, and align with interests: {config.INTERESTS}.
+
+Draft:
+{draft_text}
+
+Revise the draft with these constraints:
+- Keep it concise (2-4 short paragraphs), <= {config.MAX_POST_LENGTH} characters
+- Make the opening punchy (like a headline)
+- Include 1 concrete example/takeaway
+- Remove hashtags and emojis unless essential
+- No AI mentions, no boilerplate
+- Output only the revised post text
+
+Language: {language}
+"""

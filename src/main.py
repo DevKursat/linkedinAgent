@@ -1,5 +1,5 @@
 """Flask web application for LinkedIn Agent."""
-from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, flash
 import secrets
 from . import db
 from .config import config
@@ -8,6 +8,8 @@ from .proactive import enqueue_target as enqueue_target_fn
 from .scheduler import get_next_runs, run_now
 from .utils import get_istanbul_time
 from .proactive import discover_and_enqueue
+from .gemini import generate_text
+from .generator import generate_refine_post_prompt
 
 
 app = Flask(__name__)
@@ -35,7 +37,14 @@ INDEX_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h1>LinkedIn Agent</h1>
+        <h1>LinkedIn Agent</h1>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="status" style="background: {{ '#ffe0e0' if category=='error' else '#e7ffe7' }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
     
     <div class="status">
         <h2>Status</h2>
@@ -97,8 +106,12 @@ INDEX_TEMPLATE = """
     <div class=\"status\">
         <h2>Manual Share</h2>
         <form method=\"POST\" action=\"{{ url_for('manual_post') }}\">
-            <textarea name=\"content\" rows=\"4\" placeholder=\"Write a post...\" required></textarea>
+            <textarea name=\"content\" rows=\"6\" placeholder=\"Write a post...\" required>{{ refined_text or '' }}</textarea>
             <button type=\"submit\" class=\"button\">Share Post</button>
+        </form>
+        <form method=\"POST\" action=\"{{ url_for('refine_post') }}\" style=\"margin-top:10px;\">
+            <textarea name=\"draft\" rows=\"3\" placeholder=\"Paste your draft here to refine...\"></textarea>
+            <button type=\"submit\" class=\"button\">Refine with AI</button>
         </form>
         <h3>Comment on a Post</h3>
         <form method=\"POST\" action=\"{{ url_for('manual_comment') }}\">
@@ -320,9 +333,11 @@ def trigger_job():
     job = request.form.get('job', '')
     try:
         run_now(job)
+        flash(f"Triggered job: {job}", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        return f"Error triggering job: {e}", 400
+        flash(f"Error triggering job: {e}", 'error')
+        return redirect(url_for('index'))
 
 
 @app.route('/manual_post', methods=['POST'])
@@ -330,19 +345,25 @@ def manual_post():
     """Manually share a post immediately."""
     content = request.form.get('content', '').strip()
     if not content:
-        return "Post content required", 400
+        flash("Post content required", 'error')
+        return redirect(url_for('index'))
     if config.DRY_RUN:
-        print("[DRY_RUN] Manual post:", content[:120])
+        print("[DRY_RUN] Manual post:", content[:200])
+        flash("[DRY_RUN] Manual post accepted (no real post sent)", 'success')
         return redirect(url_for('index'))
     try:
         api = LinkedInAPI()
         res = api.post_ugc(content)
         post_id = res.get('id', '')
         post_urn = res.get('urn', '')
+        if not post_id and not post_urn:
+            raise RuntimeError("LinkedIn API did not return a post id/urn")
         db.save_post(post_id, post_urn, content, None)
+        flash("Post shared successfully", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        return f"Error posting: {e}", 400
+        flash(f"Error posting: {e}", 'error')
+        return redirect(url_for('index'))
 
 
 @app.route('/manual_comment', methods=['POST'])
@@ -351,16 +372,55 @@ def manual_comment():
     target_urn = request.form.get('target_urn', '').strip()
     comment = request.form.get('comment', '').strip()
     if not target_urn or not comment:
-        return "target_urn and comment required", 400
+        flash("target_urn and comment required", 'error')
+        return redirect(url_for('index'))
     if config.DRY_RUN:
-        print(f"[DRY_RUN] Manual comment to {target_urn}:", comment[:120])
+        print(f"[DRY_RUN] Manual comment to {target_urn}:", comment[:200])
+        flash("[DRY_RUN] Comment accepted (no real comment sent)", 'success')
         return redirect(url_for('index'))
     try:
         api = LinkedInAPI()
         api.comment_on_post(target_urn, comment)
+        flash("Comment sent successfully", 'success')
         return redirect(url_for('index'))
     except Exception as e:
-        return f"Error commenting: {e}", 400
+        flash(f"Error commenting: {e}", 'error')
+        return redirect(url_for('index'))
+
+
+@app.route('/refine_post', methods=['POST'])
+def refine_post():
+    """Use Gemini to refine the user's draft and prefill the manual post textarea."""
+    draft = request.form.get('draft', '').strip()
+    if not draft:
+        flash("Please paste a draft to refine", 'error')
+        return redirect(url_for('index'))
+    try:
+        prompt = generate_refine_post_prompt(draft, language='English')
+        refined = generate_text(prompt, temperature=0.6, max_tokens=400)
+        flash("Draft refined. You can review and post.", 'success')
+        # Re-render index with refined_text filled
+        token = db.get_token()
+        authenticated = token is not None
+        posts = db.get_recent_posts(limit=5)
+        return render_template_string(
+            INDEX_TEMPLATE,
+            time=get_istanbul_time(),
+            timezone=config.TZ,
+            dry_run=config.DRY_RUN,
+            authenticated=authenticated,
+            persona={
+                'name': config.PERSONA_NAME,
+                'age': config.PERSONA_AGE,
+                'role': config.PERSONA_ROLE,
+            },
+            posts=posts,
+            next_runs=get_next_runs(),
+            refined_text=refined,
+        )
+    except Exception as e:
+        flash(f"Error refining draft: {e}", 'error')
+        return redirect(url_for('index'))
 
 
 if __name__ == '__main__':
