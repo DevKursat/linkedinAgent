@@ -19,14 +19,26 @@ class LinkedInAPI:
         self.scopes = config.LINKEDIN_SCOPES.split()
         self._me_cache: Optional[Dict[str, Any]] = None
 
+    @staticmethod
+    def _normalize_version(version: str) -> Optional[str]:
+        if not version:
+            return None
+        candidate = version.strip()
+        if not candidate:
+            return None
+        match = re.match(r"^(20\d{4})(?:\.\d{2})?", candidate)
+        if match:
+            return match.group(1)
+        return None
+
     def _rest_versions(self) -> List[str]:
         versions: List[str] = []
-        primary = (config.LINKEDIN_REST_VERSION or "").strip()
+        primary = self._normalize_version(config.LINKEDIN_REST_VERSION or "")
         if primary:
             versions.append(primary)
-        fallbacks = [v.strip() for v in (config.LINKEDIN_REST_VERSION_FALLBACKS or "").split(",") if v.strip()]
+        fallbacks = [self._normalize_version(v) for v in (config.LINKEDIN_REST_VERSION_FALLBACKS or "").split(",")]
         for v in fallbacks:
-            if v not in versions:
+            if v and v not in versions:
                 versions.append(v)
         # Ensure we always try at least one default if nothing configured
         if not versions:
@@ -37,12 +49,14 @@ class LinkedInAPI:
         """Extract possible version strings from LinkedIn 426 error messages."""
         if not error_text:
             return []
-        found = set()
+        ordered: List[str] = []
+        seen = set()
         for match in re.findall(r"20\d{4,6}", error_text):
-            found.add(match)
-            if len(match) == 8:
-                found.add(match[:6])
-        return [v for v in found if v]
+            normalized = self._normalize_version(match)
+            if normalized and normalized not in seen:
+                ordered.append(normalized)
+                seen.add(normalized)
+        return ordered
 
     # URLs and OAuth
     def get_authorization_url(self, state: str) -> str:
