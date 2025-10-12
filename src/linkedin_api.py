@@ -264,13 +264,39 @@ class LinkedInAPI:
         }
         
         with httpx.Client(timeout=30, headers=self._headers()) as c:
-            r = c.post(f"{API_BASE}/ugcPosts", json=payload_v2)
-            r.raise_for_status()
-            urn = r.json().get("id") or r.headers.get("x-restli-id")
+            # Try classic ugcPosts
+            try:
+                r = c.post(f"{API_BASE}/ugcPosts", json=payload_v2)
+                r.raise_for_status()
+                urn = r.json().get("id") or r.headers.get("x-restli-id")
+            except Exception as e:
+                print(f"ugcPosts fallback failed: {e}")
+                urn = None
+
+        if urn:
             if urn and not str(urn).startswith("urn:"):
                 urn = f"urn:li:ugcPost:{urn}"
-            # Return a dict compatible with scheduler expectations
             return {"id": urn.split(":")[-1] if urn else "", "urn": urn}
+
+        # As a last resort, try creating a simple share via shares endpoint
+        try:
+            share_payload = {
+                "owner": author_urn,
+                "text": {"text": text},
+                "distribution": {"feedDistribution": "MAIN_FEED"},
+            }
+            with httpx.Client(timeout=30, headers=self._headers()) as c:
+                r = c.post(f"{API_BASE}/shares", json=share_payload)
+                r.raise_for_status()
+                share_id = r.json().get("id") or r.headers.get("x-restli-id")
+                urn = f"urn:li:share:{share_id}" if share_id else None
+                if urn:
+                    return {"id": urn.split(":")[-1], "urn": urn}
+        except Exception as e:
+            print(f"shares fallback failed: {e}")
+
+        # If all creation attempts fail, raise
+        raise RuntimeError("Failed to create post using any known LinkedIn endpoint")
 
     def comment_on_post(self, ugc_urn: str, text: str) -> Dict[str, Any]:
         """Add a comment to a post. Works with both old ugcPost and new share URNs."""
