@@ -222,6 +222,14 @@ def poll_and_reply_comments():
                         replace_existing=True
                     )
                     print(f"Scheduled reply for {run_date} (in {delay}s)")
+                else:
+                    # If scheduler isn't running in this process (e.g. web container),
+                    # send the reply immediately so comments don't remain unreplied.
+                    try:
+                        print(f"Scheduler not available; sending reply immediately for {comment['comment_id']}")
+                        send_reply()
+                    except Exception as e:
+                        print(f"Error sending immediate reply for {comment['comment_id']}: {e}")
             
             except Exception as e:
                 print(f"Error processing comment {comment['comment_id']}: {e}")
