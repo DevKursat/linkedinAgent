@@ -298,8 +298,9 @@ class LinkedInAPI:
         # If all creation attempts fail, raise
         raise RuntimeError("Failed to create post using any known LinkedIn endpoint")
 
-    def comment_on_post(self, ugc_urn: str, text: str) -> Dict[str, Any]:
-        """Add a comment to a post. Works with both old ugcPost and new share URNs."""
+    def comment_on_post(self, ugc_urn: str, text: str, parent_comment_id: Optional[str] = None) -> Dict[str, Any]:
+        """Add a comment to a post. If parent_comment_id is provided, attempt to post a threaded reply to that comment.
+        Works with both old ugcPost and new share URNs."""
         # Normalize URN
         if not ugc_urn.startswith("urn:"):
             ugc_urn = f"urn:li:share:{ugc_urn}"
@@ -315,6 +316,12 @@ class LinkedInAPI:
 
         post_id = _extract_post_id(ugc_urn)
         payload = {"actor": actor, "message": {"text": text}}
+        # If a parent comment id was provided, construct a parent URN and include it in the payload
+        if parent_comment_id:
+            parent_urn = parent_comment_id if parent_comment_id.startswith("urn:") else f"urn:li:comment:{parent_comment_id}"
+            # Some LinkedIn endpoints accept parent or inReplyTo fields for threaded replies; include both to increase compatibility
+            payload["parent"] = parent_urn
+            payload["inReplyTo"] = parent_urn
 
         if post_id and self._rest_allowed():
             # Prefer v3 posts endpoint

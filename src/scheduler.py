@@ -205,7 +205,8 @@ def poll_and_reply_comments():
                 
                 def send_reply():
                     try:
-                        result = api.comment_on_post(post['post_urn'], reply_text)
+                        # If the original comment has an id, use it as the parent so we reply to that comment
+                        result = api.comment_on_post(post['post_urn'], reply_text, parent_comment_id=comment.get('comment_id'))
                         reply_id = result.get("id", "")
                         db.mark_comment_replied(comment['comment_id'], reply_id)
                         print(f"Replied to comment {comment['comment_id']}")
