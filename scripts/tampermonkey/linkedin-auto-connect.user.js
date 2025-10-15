@@ -15,14 +15,14 @@
 
     // ---------- CONFIG (edit in this file) ----------
     const CFG = {
-        // Conservative defaults to minimize LinkedIn flags
-    INVITES_PER_HOUR: 1,       // max invites per hour (conservative)
+        // Defaults tuned to user's request: ~20/day between 07-21
+    INVITES_PER_HOUR: 2,       // max invites per hour (approx 20 / 14hrs => ~1.5 -> 2)
         INVITES_HOUR_START: 7,     // start hour (local) inclusive
         INVITES_HOUR_END: 21,      // end hour (local) inclusive
         // Ramp-up: in the first N days after first run, use DAILY_START_CAP, then increase to MAX_PER_DAY
     RAMP_UP_DAYS: 7,
-    DAILY_START_CAP: 5,        // starting daily cap during ramp-up (very conservative)
-    MAX_PER_DAY: 10,           // steady-state daily cap (conservative)
+    DAILY_START_CAP: 5,        // starting daily cap during ramp-up
+    MAX_PER_DAY: 20,           // steady-state daily cap (user requested ~20)
         AUTO_CLOSE_TAB: true,      // close tab after sending invite (if opened by manual_invites.html)
         MIN_DELAY_MS: 5000,        // minimum delay before click (ms)
         MAX_DELAY_MS: 15000,       // maximum delay before click (ms)
