@@ -112,6 +112,20 @@ INDEX_TEMPLATE = """
             <div class="info">Henüz paylaşım yok</div>
         {% endif %}
     </div>
+        
+        <div class="status">
+            <h2>Davet İstatistikleri</h2>
+            <div id="invite-stats">
+                <p>Toplam gönderilen: {{ invite_stats.total_sent }}</p>
+                <p>Onaylanan: {{ invite_stats.accepted }}</p>
+                <p>Reddedilen: {{ invite_stats.rejected }}</p>
+                <p>Bekleyen: {{ invite_stats.pending }}</p>
+                <p>Onay oranı: {{ invite_stats.acceptance_rate }}%</p>
+            </div>
+            <form method="POST" action="{{ url_for('start_invite_campaign') }}" style="display:inline;">
+                <button class="button" type="submit">7 Günlük Davet Kampanyasını Başlat</button>
+            </form>
+        </div>
 
     <div class="status">
         <h2>Manuel Paylaşım</h2>
@@ -225,7 +239,8 @@ def index():
     authenticated = token is not None
     
     posts = db.get_recent_posts(limit=5)
-    
+    invite_stats = db.get_invite_stats(days=7)
+
     return render_template_string(
         INDEX_TEMPLATE,
         time=get_istanbul_time(),
@@ -239,6 +254,7 @@ def index():
         },
         posts=posts,
         next_runs=get_next_runs(),
+        invite_stats=invite_stats,
     )
 
 
@@ -394,6 +410,18 @@ def trigger_job():
     except Exception as e:
         flash(f"İş tetiklenirken hata: {e}", 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/start-invite-campaign', methods=['POST'])
+def start_invite_campaign():
+    try:
+        # Create a campaign with configured days
+        campaign = db.create_invites_campaign('7-day-campaign', days=int(config.INVITES_CAMPAIGN_DAYS))
+        # Enable invites and persist in .env via manage command or operator
+        flash('Davet kampanyası başlatıldı: ' + str(campaign.get('id')), 'success')
+    except Exception as e:
+        flash('Kampanya başlatma hatası: ' + str(e), 'error')
+    return redirect(url_for('index'))
 
 
 @app.route('/manual_post', methods=['POST'])

@@ -449,6 +449,14 @@ def process_invites():
             print("Invites are disabled in config")
             return
 
+        # If there's an active campaign, ensure we're within its period
+        try:
+            active_campaign = db.get_active_campaign()
+            if active_campaign is not None:
+                print(f"Active invites campaign: {active_campaign.get('name')} ends at {active_campaign.get('ends_at')}")
+        except Exception:
+            active_campaign = None
+
         # Respect configured invite hours window
         now_hour = datetime.now().hour
         start_h = getattr(config, 'INVITES_HOUR_START', 7)
@@ -463,9 +471,15 @@ def process_invites():
             print(f"Invite daily limit reached: {today_count}/{config.INVITES_MAX_PER_DAY}")
             return
 
-        # Determine per-hour quota and batch size
-        per_hour = max(1, int(getattr(config, 'INVITES_PER_HOUR', config.INVITES_BATCH_SIZE)))
+        # Determine per-hour quota and batch size.
+        # Compute available hours in window (e.g., 7..21 -> 14 hours)
+        hours_window = max(1, end_h - start_h)
+        # target per hour to reach daily goal within window
+        target_per_hour = max(1, int(config.INVITES_MAX_PER_DAY / hours_window))
+        # allow override via INVITES_PER_HOUR but do not exceed reasonable caps
+        per_hour = max(1, min(int(config.INVITES_PER_HOUR), max(target_per_hour, int(config.INVITES_PER_HOUR))))
         batch = min(per_hour, int(config.INVITES_BATCH_SIZE), remaining_daily)
+
         pending = db.get_pending_invites()[:batch]
         if not pending:
             print("No pending invites")
@@ -483,10 +497,17 @@ def process_invites():
                         print("[DRY_RUN] Would send invite")
                     else:
                         api.send_invite(person_urn, msg)
+                    # Mark sent in DB (even in dry run we mark to avoid duplicates when testing)
                     db.mark_invite_sent(inv['id'])
                     print(f"Invite sent/marked for {person_urn}")
                 except Exception as e:
                     print(f"Failed to send invite to {person_urn}: {e}")
+                    # Enqueue failed action for retry
+                    try:
+                        payload = f"{person_urn}||{person_name}||{msg}"
+                        db.enqueue_failed_action('invite', payload, str(e))
+                    except Exception:
+                        pass
                     continue
             except Exception as e:
                 print(f"Error processing invite id {inv.get('id')}: {e}")

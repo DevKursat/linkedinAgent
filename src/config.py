@@ -56,12 +56,17 @@ class Config:
 
     # Invites (disabled by default for safety)
     INVITES_ENABLED: bool = os.getenv("INVITES_ENABLED", "false").lower() == "true"
-    INVITES_MAX_PER_DAY: int = int(os.getenv("INVITES_MAX_PER_DAY", "5"))
-    INVITES_BATCH_SIZE: int = int(os.getenv("INVITES_BATCH_SIZE", "2"))
-    # Invite scheduling (per-hour controls)
-    INVITES_PER_HOUR: int = int(os.getenv("INVITES_PER_HOUR", "15"))
+    # Desired daily invites (user requested ~20)
+    INVITES_MAX_PER_DAY: int = int(os.getenv("INVITES_MAX_PER_DAY", "20"))
+    # How many invites at most to process in a single batch
+    INVITES_BATCH_SIZE: int = int(os.getenv("INVITES_BATCH_SIZE", "3"))
+    # Invite scheduling (controls / soft caps)
+    # Default per-hour cap (scheduler will compute per-hour quota to average daily target)
+    INVITES_PER_HOUR: int = int(os.getenv("INVITES_PER_HOUR", "3"))
     INVITES_HOUR_START: int = int(os.getenv("INVITES_HOUR_START", "7"))
     INVITES_HOUR_END: int = int(os.getenv("INVITES_HOUR_END", "21"))
+    # Campaign duration in days (when started via manage command)
+    INVITES_CAMPAIGN_DAYS: int = int(os.getenv("INVITES_CAMPAIGN_DAYS", "7"))
     # Proactive posting: when discovered items lack a LinkedIn URN, optionally post them as new shares
     AUTO_POST_DISCOVERED_AS_SHARE: bool = os.getenv("AUTO_POST_DISCOVERED_AS_SHARE", "true").lower() == "true"
     # Failed actions / retry behavior

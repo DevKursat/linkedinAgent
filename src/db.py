@@ -1,7 +1,7 @@
 """Database management for LinkedIn Agent."""
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from .config import config
 
@@ -94,7 +94,9 @@ def init_db():
             reason TEXT,
             status TEXT DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            sent_at TIMESTAMP
+            sent_at TIMESTAMP,
+            accepted_at TIMESTAMP,
+            rejected_at TIMESTAMP
         )
     """)
 
@@ -126,6 +128,21 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database initialized successfully")
+
+    # Campaigns table for invites
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS invites_campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            started_at TIMESTAMP,
+            ends_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
 def save_token(access_token: str, expires_in: int, refresh_token: Optional[str] = None):
@@ -400,6 +417,95 @@ def get_today_invite_count() -> int:
     row = cursor.fetchone()
     conn.close()
     return row['count'] if row else 0
+
+
+def get_invite_stats(days: int = 7) -> Dict[str, Any]:
+    """Return invite stats for the last N days: sent, accepted, rejected, pending, acceptance_rate."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    since = datetime.now() - timedelta(days=days)
+    cursor.execute(
+        "SELECT COUNT(*) as total_sent FROM invites WHERE status = 'sent' AND sent_at >= ?",
+        (since,)
+    )
+    total_sent = cursor.fetchone()['total_sent'] or 0
+
+    cursor.execute(
+        "SELECT COUNT(*) as accepted FROM invites WHERE accepted_at IS NOT NULL AND accepted_at >= ?",
+        (since,)
+    )
+    accepted = cursor.fetchone()['accepted'] or 0
+
+    cursor.execute(
+        "SELECT COUNT(*) as rejected FROM invites WHERE rejected_at IS NOT NULL AND rejected_at >= ?",
+        (since,)
+    )
+    rejected = cursor.fetchone()['rejected'] or 0
+
+    cursor.execute(
+        "SELECT COUNT(*) as pending FROM invites WHERE status = 'pending' AND created_at >= ?",
+        (since,)
+    )
+    pending = cursor.fetchone()['pending'] or 0
+
+    conn.close()
+    acceptance_rate = (accepted / total_sent * 100.0) if total_sent > 0 else 0.0
+    return {
+        'total_sent': int(total_sent),
+        'accepted': int(accepted),
+        'rejected': int(rejected),
+        'pending': int(pending),
+        'acceptance_rate': round(float(acceptance_rate), 2),
+    }
+
+
+def mark_invite_accepted(invite_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE invites SET accepted_at = ?, status='sent' WHERE id = ?", (datetime.now(), invite_id))
+    conn.commit()
+    conn.close()
+
+
+def mark_invite_rejected(invite_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE invites SET rejected_at = ?, status='failed' WHERE id = ?", (datetime.now(), invite_id))
+    conn.commit()
+    conn.close()
+
+
+def create_invites_campaign(name: str, days: int = 7) -> Dict[str, Any]:
+    # Ensure table exists (defensive in case init_db wasn't run)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS invites_campaigns (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            started_at TIMESTAMP,
+            ends_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    started = datetime.now()
+    ends = started + timedelta(days=days)
+    cursor.execute("INSERT INTO invites_campaigns (name, started_at, ends_at) VALUES (?, ?, ?)", (name, started, ends))
+    conn.commit()
+    cid = cursor.lastrowid
+    conn.close()
+    return {'id': cid, 'name': name, 'started_at': started, 'ends_at': ends}
+
+
+def get_active_campaign() -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    now = datetime.now()
+    cursor.execute("SELECT * FROM invites_campaigns WHERE started_at <= ? AND ends_at >= ? ORDER BY started_at DESC LIMIT 1", (now, now))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 def enqueue_failed_action(action_type: str, payload: str, error: str = "", next_attempt=None) -> int:

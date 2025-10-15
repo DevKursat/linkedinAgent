@@ -203,6 +203,7 @@ def main():
     p = sub.add_parser("export-invites-html", help="Export pending invites into an HTML page for manual sending")
     p.add_argument("--out", help="Output HTML path", default="data/manual_invites.html")
     p.set_defaults(func=cmd_export_invites_html)
+    sub.add_parser("start-invite-campaign").set_defaults(func=cmd_start_invite_campaign)
 
     args = ap.parse_args()
     if not hasattr(args, "func"):
@@ -300,6 +301,44 @@ def cmd_enable_invites(args):
     print('INVITES_ENABLED=true and DRY_RUN=false written to .env')
 
 
+def cmd_start_invite_campaign(args):
+    """Start a new invites campaign and enable invites in .env."""
+    from src import db
+    name = 'manual-campaign'
+    try:
+        days = int(os.getenv('INVITES_CAMPAIGN_DAYS', '7'))
+        campaign = db.create_invites_campaign(name, days=days)
+    except Exception:
+        campaign = db.create_invites_campaign(name, days=7)
+
+    # Update .env to enable invites and disable dry-run
+    path = '.env'
+    if not os.path.exists(path):
+        print('.env not found; cannot enable invites')
+        return
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = f.read().splitlines()
+    out = []
+    found_enabled = False
+    found_dry = False
+    for line in lines:
+        if line.startswith('INVITES_ENABLED='):
+            out.append('INVITES_ENABLED=true')
+            found_enabled = True
+        elif line.startswith('DRY_RUN='):
+            out.append('DRY_RUN=false')
+            found_dry = True
+        else:
+            out.append(line)
+    if not found_enabled:
+        out.append('INVITES_ENABLED=true')
+    if not found_dry:
+        out.append('DRY_RUN=false')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(out) + '\n')
+    print('Started invite campaign and updated .env (INVITES_ENABLED=true, DRY_RUN=false)')
+
+
 def cmd_export_invites_html(args):
     """Export pending invites into a static HTML file with copy buttons and profile links."""
     from src import db
@@ -322,17 +361,44 @@ def cmd_export_invites_html(args):
         msg = generate_invite_message(name)
         rows.append({'id': i.get('id'), 'urn': urn, 'name': name, 'profile_url': profile_url, 'message': msg})
 
-    html = ['<!doctype html>','<html><head><meta charset="utf-8"><title>Manual Invites</title>','<style>body{font-family:Arial,sans-serif;padding:20px} .invite{border:1px solid #ddd;padding:12px;margin:8px 0} button{margin-left:8px}</style>','</head><body>','<h1>Pending Invites</h1>','<p>Click profile to open LinkedIn. Use "Copy message" to copy the personalized invite text and paste it into the LinkedIn invite dialog.</p>','<div id="list">']
+    html = [
+        '<!doctype html>',
+        '<html><head><meta charset="utf-8"><title>Manual Invites</title>',
+        '<style>body{font-family:Arial,sans-serif;padding:20px} .invite{border:1px solid #ddd;padding:12px;margin:8px 0} button{margin-left:8px}</style>',
+        '</head><body>',
+        '<h1>Pending Invites</h1>',
+        '<p>Click profile to open LinkedIn. Use "Copy message" to copy the personalized invite text and paste it into the LinkedIn invite dialog.</p>',
+        '<p><button id="openAll">Open all profiles</button> <button id="stopOpen">Stop</button> Delay <input id="delay" type="number" value="5000" style="width:80px"/> ms</p>',
+        '<div id="list">'
+    ]
     for r in rows:
         html.append(f"<div class=\"invite\"><strong>{r['name'] or r['urn']}</strong><br/>")
         if r['profile_url']:
-            html.append(f"<a href=\"{r['profile_url']}\" target=\"_blank\">Open profile</a>")
+            html.append(f"<a class=\"profile-link\" href=\"{r['profile_url']}\" target=\"_blank\">Open profile</a>")
         else:
             html.append(f"<span>No profile link available</span>")
         html.append(f"<button onclick=\"navigator.clipboard.writeText({repr(r['message'])})\">Copy message</button>")
         html.append(f"<pre style=\"white-space:pre-wrap;\">{r['message']}</pre>")
         html.append('</div>')
     html.append('</div>')
+    # Add script to open profiles sequentially with configurable delay
+    html.append('<script>')
+    html.append('(() => {')
+    html.append('  let timer = null; let idx = 0;')
+    html.append('  function getLinks() { return Array.from(document.querySelectorAll(\"#list a.profile-link[target=\\\"_blank\\\"]\")); }')
+    html.append('  function openNext() {')
+    html.append('    const links = getLinks();')
+    html.append('    if (idx >= links.length) { clearInterval(timer); timer = null; alert("All profiles opened"); return; }')
+    html.append('    try { window.open(links[idx].href, "_blank"); } catch (e) { console.error(e); }')
+    html.append('    idx++;')
+    html.append('  }')
+    html.append('  document.getElementById("openAll").addEventListener("click", () => {')
+    html.append('    if (timer) return; idx = 0; const d = parseInt(document.getElementById("delay").value) || 5000; openNext(); timer = setInterval(openNext, d);')
+    html.append('  });')
+    html.append('  document.getElementById("stopOpen").addEventListener("click", () => { if (timer) { clearInterval(timer); timer = null; alert("Stopped"); } });')
+    html.append('  // Hint: allow users to click individual links if they prefer manual control')
+    html.append('})();')
+    html.append('</script>')
     html.append('<p>When done, mark invites as sent via `manage.py send-invite <id> --force` or manually edit the DB.</p>')
     html.append('</body></html>')
 

@@ -113,10 +113,23 @@ def discover_and_enqueue(limit: int = 3) -> int:
 
             # Enqueue proactive target and auto-approve for autonomous posting
             db.enqueue_proactive_target(a['link'], "", context, suggestion)
-            # If we resolved a person urn, call enqueue_target which may enqueue an invite.
+            # If we resolved a person urn, inspect the fetched page for heuristics (English + 'founder')
             try:
-                # Use enqueue_target helper to keep auto-approval behavior and invite enqueue.
-                enqueue_target(a['link'], "", context, suggest_invite=True, person_urn=person_urn, person_name=(slug if person_urn else ""))
+                should_invite = False
+                if person_urn and slug:
+                    page_text = text.lower() if 'text' in locals() and text else ''
+                    # Quick check: English detection by presence of common English words and absence of non-latin script
+                    english_score = sum(1 for w in ['the','and','founder','company','startup'] if w in page_text)
+                    is_english = english_score >= 1
+                    is_founder = 'founder' in page_text or 'co-founder' in page_text or 'ceo' in page_text
+                    if is_english and is_founder:
+                        should_invite = True
+                if should_invite:
+                    try:
+                        db.enqueue_invite(person_urn, slug or '', reason=f"Discovered founder in {a.get('link')}")
+                        print(f"Enqueued invite for discovered founder: {person_urn}")
+                    except Exception as e:
+                        print(f"Failed to enqueue discovered founder invite for {person_urn}: {e}")
             except Exception:
                 pass
 
