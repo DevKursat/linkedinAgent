@@ -3,13 +3,13 @@ from flask import Flask, render_template_string, request, redirect, url_for, ses
 import secrets
 from . import db
 from .config import config
-from .linkedin_api import LinkedInAPI
+from .linkedin_api import LinkedInAPI, get_linkedin_api
 from .proactive import enqueue_target as enqueue_target_fn
 from .scheduler import get_next_runs, run_now
 from .utils import get_istanbul_time
 from .proactive import discover_and_enqueue
 from .gemini import generate_text
-from .generator import generate_refine_post_prompt
+from .generator import generate_refine_post_prompt, generate_invite_message
 from .diagnostics import doctor as diag_doctor
 from .comment_handler import handle_incoming_comment
 
@@ -96,6 +96,7 @@ INDEX_TEMPLATE = """
             <input type="hidden" name="job" value="proactive_queue">
             <button class="button" type="submit">Proaktif Kuyruğu İşle</button>
         </form>
+        <a href="{{ url_for('invites') }}" class="button">Davetler</a>
     </div>
     
     <div class="status">
@@ -117,13 +118,16 @@ INDEX_TEMPLATE = """
             <h2>Davet İstatistikleri</h2>
             <div id="invite-stats">
                 <p>Toplam gönderilen: {{ invite_stats.total_sent }}</p>
-                <p>Onaylanan: {{ invite_stats.accepted }}</p>
-                <p>Reddedilen: {{ invite_stats.rejected }}</p>
-                <p>Bekleyen: {{ invite_stats.pending }}</p>
+                    <form method="POST" action="{{ url_for('send_suggested_invite') }}" style="display:inline; margin-top:8px;">
+                        <button class="button" type="submit">Önerilen Kişiye Davet Gönder (Test)</button>
+                    </form>
                 <p>Onay oranı: {{ invite_stats.acceptance_rate }}%</p>
             </div>
-            <form method="POST" action="{{ url_for('start_invite_campaign') }}" style="display:inline;">
-                <button class="button" type="submit">7 Günlük Davet Kampanyasını Başlat</button>
+            <h3>Test: Bağlantı Daveti Gönder</h3>
+            <form method="POST" action="{{ url_for('send_invite_ui') }}" style="display:inline;">
+                <input type="text" name="profile" placeholder="https://www.linkedin.com/in/slug veya urn:li:person:..." style="width:400px;padding:6px;margin-right:6px" required />
+                <label style="margin-right:8px"><input type="checkbox" name="force"> Zorla gönder (DRY_RUN yok say)</label>
+                <button class="button" type="submit">Bağlantı Daveti Gönder (Test)</button>
             </form>
         </div>
 
@@ -227,6 +231,48 @@ QUEUE_TEMPLATE = """
     {% else %}
     <div class="item">Onaylanmış öğe yok</div>
     {% endfor %}
+</body>
+</html>
+"""
+
+
+INVITES_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+        <meta charset="utf-8">
+        <title>Dav etler</title>
+        <style>body{font-family:Arial,sans-serif;padding:20px} .invite{border:1px solid #ddd;padding:12px;margin:8px 0} .button{padding:8px 12px;background:#0077b5;color:#fff;border:none;border-radius:4px;cursor:pointer}</style>
+        </head>
+<body>
+<h1>Bekleyen Davetler</h1>
+<a href="{{ url_for('index') }}">← Geri</a>
+{% if invites %}
+    {% for i in invites %}
+        <div class="invite" data-id="{{ i.id }}">
+            <strong>{{ i.person_name or i.person_urn }}</strong><br/>
+            <em>{{ i.reason }}</em><br/>
+            <form method="POST" action="{{ url_for('send_invite_route', invite_id=i.id) }}" style="display:inline;">
+                <button class="button">Sunucudan Gönder</button>
+            </form>
+            <button class="button" onclick="markSent({{ i.id }}, this)">Mark sent</button>
+            <pre>{{ generate_invite_message(i.person_name or '') }}</pre>
+        </div>
+    {% endfor %}
+{% else %}
+    <div>Bekleyen davet yok</div>
+{% endif %}
+
+<script>
+async function markSent(id, btn) {
+    btn.disabled = true;
+    try {
+        const res = await fetch('/mark-invite-sent', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:id}) });
+        const j = await res.json();
+        if (j.ok) { btn.innerText='Marked'; btn.style.background='#28a745' } else { alert('Failed: '+(j.error||'unknown')); btn.disabled=false }
+    } catch (e) { alert('Network error:'+e); btn.disabled=false }
+}
+</script>
 </body>
 </html>
 """
@@ -388,6 +434,33 @@ def approve_item(item_id):
     return redirect(url_for('queue'))
 
 
+@app.route('/invites')
+def invites():
+    try:
+        items = db.get_pending_invites()
+    except Exception:
+        items = []
+    return render_template_string(INVITES_TEMPLATE, invites=items, generate_invite_message=generate_invite_message)
+
+
+@app.route('/send-invite/<int:invite_id>', methods=['POST'])
+def send_invite_route(invite_id):
+    try:
+        items = db.get_pending_invites()
+        target = next((i for i in items if i['id'] == invite_id), None)
+        if not target:
+            flash('Invite not found', 'error')
+            return redirect(url_for('invites'))
+        api = get_linkedin_api()
+        msg = generate_invite_message(target.get('person_name') or '')
+        res = api.send_invite(target['person_urn'], msg)
+        db.mark_invite_sent(invite_id)
+        flash('Invite sent (server): ' + str(res), 'success')
+    except Exception as e:
+        flash('Invite send error: ' + str(e), 'error')
+    return redirect(url_for('invites'))
+
+
 @app.route('/reject/<int:item_id>', methods=['POST'])
 def reject_item(item_id):
     """Reject a queue item."""
@@ -422,6 +495,82 @@ def start_invite_campaign():
     except Exception as e:
         flash('Kampanya başlatma hatası: ' + str(e), 'error')
     return redirect(url_for('index'))
+
+
+@app.route('/send-invite-ui', methods=['POST'])
+def send_invite_ui():
+    profile = request.form.get('profile', '').strip()
+    force = bool(request.form.get('force'))
+    if not profile:
+        flash('Profil URL/URN gerekli', 'error')
+        return redirect(url_for('index'))
+
+    # normalize into person_urn if possible
+    person_urn = profile
+    if profile.startswith('https://www.linkedin.com/in/') or profile.startswith('http://www.linkedin.com/in/'):
+        person_urn = 'urn:li:person:' + profile.rstrip('/').split('/')[-1]
+
+    try:
+        # enqueue for tracking
+        db.enqueue_invite(person_urn, person_name=person_urn, reason='ui-test')
+    except Exception:
+        pass
+
+    # If force, attempt immediate send (skip DRY_RUN)
+    send_result = None
+    if force:
+        try:
+            api = get_linkedin_api()
+            msg = generate_invite_message('')
+            res = api.send_invite(person_urn, msg)
+            send_result = res
+        except Exception as e:
+            flash('Sunucu davet denemesi hata: ' + str(e), 'error')
+            return redirect(url_for('index'))
+
+    # Show the invited profile URL so user can verify
+    flash('Davet hedefi: ' + person_urn + ((' — sunucu cevabı: ' + str(send_result)) if send_result else ''), 'success')
+    return redirect(url_for('index'))
+
+
+@app.route('/send-suggested-invite', methods=['POST'])
+def send_suggested_invite():
+    try:
+        pending = db.get_pending_invites()
+        if not pending:
+            flash('Gönderilecek önerilen davet yok', 'error')
+            return redirect(url_for('index'))
+        target = pending[0]
+        person_urn = target.get('person_urn')
+        # Try sending (respect DRY_RUN)
+        if config.DRY_RUN:
+            db.mark_invite_sent(target['id'])
+            flash('DRY_RUN: Davet işaretlendi (test) -> ' + (person_urn or ''), 'success')
+            return redirect(url_for('index'))
+        api = get_linkedin_api()
+        msg = generate_invite_message(target.get('person_name') or '')
+        res = api.send_invite(person_urn, msg)
+        db.mark_invite_sent(target['id'])
+        flash('Davet gönderildi: ' + (person_urn or '') + ' — API cevap: ' + str(res), 'success')
+    except Exception as e:
+        flash('Davet gönderme hatası: ' + str(e), 'error')
+    return redirect(url_for('index'))
+
+
+@app.route('/mark-invite-sent', methods=['POST'])
+def mark_invite_sent_route():
+    """Mark an invite as sent via AJAX from the manual invites page."""
+    try:
+        data = request.get_json() or {}
+        invite_id = int(data.get('id'))
+    except Exception:
+        return jsonify({'ok': False, 'error': 'invalid payload'}), 400
+    try:
+        from . import db as _db
+        _db.mark_invite_sent(invite_id)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/manual_post', methods=['POST'])

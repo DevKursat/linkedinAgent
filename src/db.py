@@ -108,6 +108,11 @@ def init_db():
             cursor.execute("ALTER TABLE invites ADD COLUMN tags TEXT")
         if 'country' not in cols:
             cursor.execute("ALTER TABLE invites ADD COLUMN country TEXT")
+        # Ensure accepted_at / rejected_at columns exist for invite tracking
+        if 'accepted_at' not in cols:
+            cursor.execute("ALTER TABLE invites ADD COLUMN accepted_at TIMESTAMP")
+        if 'rejected_at' not in cols:
+            cursor.execute("ALTER TABLE invites ADD COLUMN rejected_at TIMESTAMP")
     except Exception:
         pass
 
