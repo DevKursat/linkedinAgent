@@ -54,6 +54,23 @@ class Config:
     AB_TESTING: bool = os.getenv("AB_TESTING", "true").lower() == "true"
     MAX_POST_LENGTH: int = int(os.getenv("MAX_POST_LENGTH", "1200"))
 
+    # Invites (disabled by default for safety)
+    INVITES_ENABLED: bool = os.getenv("INVITES_ENABLED", "false").lower() == "true"
+    INVITES_MAX_PER_DAY: int = int(os.getenv("INVITES_MAX_PER_DAY", "5"))
+    INVITES_BATCH_SIZE: int = int(os.getenv("INVITES_BATCH_SIZE", "2"))
+    # Invite scheduling (per-hour controls)
+    INVITES_PER_HOUR: int = int(os.getenv("INVITES_PER_HOUR", "15"))
+    INVITES_HOUR_START: int = int(os.getenv("INVITES_HOUR_START", "7"))
+    INVITES_HOUR_END: int = int(os.getenv("INVITES_HOUR_END", "21"))
+    # Proactive posting: when discovered items lack a LinkedIn URN, optionally post them as new shares
+    AUTO_POST_DISCOVERED_AS_SHARE: bool = os.getenv("AUTO_POST_DISCOVERED_AS_SHARE", "true").lower() == "true"
+    # Failed actions / retry behavior
+    FAILED_ACTIONS_ENABLED: bool = os.getenv("FAILED_ACTIONS_ENABLED", "true").lower() == "true"
+    FAILED_ACTIONS_MAX_RETRIES: int = int(os.getenv("FAILED_ACTIONS_MAX_RETRIES", "5"))
+    FAILED_ACTION_RETRY_BASE_SECONDS: int = int(os.getenv("FAILED_ACTION_RETRY_BASE_SECONDS", "60"))
+    # Tagging
+    TAGS_MAX_PER_POST: int = int(os.getenv("TAGS_MAX_PER_POST", "9"))
+
 
 # Export a single config instance
 config = Config()

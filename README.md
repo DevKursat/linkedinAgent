@@ -182,6 +182,58 @@ docker compose logs -f web
 - Never reveals AI identity
 - Respects rate limits with randomized delays
 
+## Simulating incoming comments (how auto-reply is triggered)
+
+- UI: On the main dashboard (`/`) there is a "Simüle Gelen Yorum" form. Use it to test the automatic reply flow without needing LinkedIn to trigger a webhook.
+- Browser (optional): Use the Tampermonkey script in `scripts/tampermonkey/linkedin-forward-comment.user.js` to detect comments you post in the LinkedIn web UI and forward them to the agent's `/incoming_comment` endpoint.
+
+See `docs/simulate-incoming-comment.md` for installation and security notes.
+
+## Bulk invite enqueuing (CSV)
+
+You can bulk enqueue connection invites using a CSV file. CSV columns:
+
+- person_urn (required)
+- person_name (optional)
+- country (optional)
+- tags (optional; semicolon-separated)
+
+Example CSV line:
+
+```
+urn:li:person:ABC123,Jane Doe,TR,product;ai
+```
+
+Command to load CSV into invites queue:
+
+```bash
+python3 manage.py enqueue-invites-csv invites.csv
+```
+
+This only enqueues invites into the local DB; actual sending is controlled by the scheduler and `INVITES_ENABLED` config.
+
+## Running continuously (background)
+
+If you want the agent to keep posting daily and processing the proactive queue, run the worker/service continuously. Example using Docker Compose:
+
+```bash
+docker compose up -d --build
+```
+
+Notes about PC sleep and availability:
+
+- The agent only runs while the process/container is active and the host machine is awake and connected to the network. If you run it locally on your laptop and put the laptop to sleep (suspend), the agent will stop executing until the machine wakes up.
+- For a reliable always-on operation, run the agent on a server or VM that stays online (cloud VM, Raspberry Pi that stays awake, or a small VPS). Alternatively, run via Docker on a home machine with power settings adjusted to avoid sleep.
+
+## Getting full permissions for comment-listing & invites
+
+To enable full automation (reading comments on external posts, sending invites), request the following from LinkedIn:
+
+- Request scopes: `w_member_social`, `r_member_social`, and any specific growth/invitations scope your app requires.
+- Provide a clear use-case justification in the LinkedIn App review explaining automated moderation, persona, and safety controls. Save that justification text in `docs/linkedin_permission_request.md` (not included yet) and provide audit logs when asked.
+
+If you want, I can draft the permission request justification for you.
+
 ## Troubleshooting
 
 **LinkedIn login fails**

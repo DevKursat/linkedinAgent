@@ -11,6 +11,7 @@ from .proactive import discover_and_enqueue
 from .gemini import generate_text
 from .generator import generate_refine_post_prompt
 from .diagnostics import doctor as diag_doctor
+from .comment_handler import handle_incoming_comment
 
 
 app = Flask(__name__)
@@ -127,6 +128,15 @@ INDEX_TEMPLATE = """
             <input type="text" name="target_urn" placeholder="urn:li:share:..." required>
             <textarea name="comment" rows="3" placeholder="Yorum yazın..." required></textarea>
             <button type="submit" class="button">Yorumu Gönder</button>
+        </form>
+        <h3>Simüle Gelen Yorum (Webhook testi)</h3>
+        <form method="POST" action="{{ url_for('simulate_incoming_comment') }}">
+            <input type="text" name="sim_post_urn" placeholder="urn:li:share:..." required>
+            <input type="text" name="sim_comment_id" placeholder="comment_id (ör: sim-123)" required>
+            <input type="text" name="sim_actor" placeholder="actor urn (ör: urn:li:person:abcdef)" required>
+            <textarea name="sim_text" rows="3" placeholder="Gelen yorum metni" required></textarea>
+            <label style="display:block; margin-top:6px;"><input type="checkbox" name="sim_reply_as_user"> Kullanıcı gibi yanıtla (ilk tekil şahıs)</label>
+            <button type="submit" class="button">Simüle Et ve Yanıtla</button>
         </form>
     </div>
 </body>
@@ -471,6 +481,59 @@ def refine_post():
     except Exception as e:
         flash(f"Taslak düzenleme hatası: {e}", 'error')
         return redirect(url_for('index'))
+
+
+@app.route('/incoming_comment', methods=['POST'])
+def incoming_comment():
+    """Endpoint to receive an incoming comment (for webhook or manual tests).
+    Expected JSON: {post_urn, comment_id, actor, text, reply_as_user (optional)}
+    """
+    payload = request.get_json(silent=True) or {}
+    post_urn = payload.get('post_urn') or request.form.get('post_urn')
+    comment_id = payload.get('comment_id') or request.form.get('comment_id')
+    actor = payload.get('actor') or request.form.get('actor')
+    text = payload.get('text') or request.form.get('text')
+    reply_as_user = bool(payload.get('reply_as_user') or request.form.get('reply_as_user'))
+
+    if not post_urn or not comment_id or not actor or not text:
+        return jsonify({'error': 'post_urn, comment_id, actor and text required'}), 400
+
+    try:
+        res = handle_incoming_comment(post_urn, comment_id, actor, text, reply_as_user=reply_as_user)
+        return jsonify(res), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/simulate_incoming_comment', methods=['POST'])
+def simulate_incoming_comment():
+    """UI route to simulate an incoming comment (calls handle_incoming_comment).
+    Form fields: sim_post_urn, sim_comment_id, sim_actor, sim_text, sim_reply_as_user
+    """
+    post_urn = request.form.get('sim_post_urn', '').strip()
+    comment_id = request.form.get('sim_comment_id', '').strip()
+    actor = request.form.get('sim_actor', '').strip()
+    text = request.form.get('sim_text', '').strip()
+    reply_as_user = bool(request.form.get('sim_reply_as_user'))
+
+    if not post_urn or not comment_id or not actor or not text:
+        flash('Simülasyon için tüm alanlar gerekli', 'error')
+        return redirect(url_for('index'))
+
+    try:
+        res = handle_incoming_comment(post_urn, comment_id, actor, text, reply_as_user=reply_as_user)
+        if res.get('status') == 'dry_run':
+            flash('[TEST MODU] Simüle yanıt hazır: ' + (res.get('reply') or '')[:200], 'success')
+        elif res.get('status') == 'replied':
+            flash('Yorum başarıyla yanıtlandı (ID: ' + (res.get('reply_id') or '') + ')', 'success')
+        elif res.get('status') == 'skipped_self':
+            flash('Kendi yorumunuz için atlandı', 'info')
+        else:
+            flash('Simülasyon sonucu: ' + str(res), 'info')
+    except Exception as e:
+        flash('Simülasyon sırasında hata: ' + str(e), 'error')
+
+    return redirect(url_for('index'))
 
 
 if __name__ == '__main__':

@@ -84,6 +84,44 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Connection invites table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS invites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            person_urn TEXT,
+            person_name TEXT,
+            reason TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sent_at TIMESTAMP
+        )
+    """)
+
+    # Ensure new columns exist (tags, country) for invites without full migrations
+    try:
+        cursor.execute("PRAGMA table_info(invites)")
+        cols = [r[1] for r in cursor.fetchall()]
+        if 'tags' not in cols:
+            cursor.execute("ALTER TABLE invites ADD COLUMN tags TEXT")
+        if 'country' not in cols:
+            cursor.execute("ALTER TABLE invites ADD COLUMN country TEXT")
+    except Exception:
+        pass
+
+    # Failed actions queue (for retrying transient failures)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS failed_actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT,
+            payload TEXT,
+            error TEXT,
+            attempts INTEGER DEFAULT 0,
+            last_attempt TIMESTAMP,
+            next_attempt TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     
     conn.commit()
     conn.close()
@@ -305,6 +343,117 @@ def mark_queue_item_posted(item_id: int):
         (datetime.now(), item_id)
     )
     
+    conn.commit()
+    conn.close()
+
+
+def enqueue_invite(person_urn: str, person_name: str, reason: str = "") -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """INSERT INTO invites (person_urn, person_name, reason) VALUES (?, ?, ?)""",
+        (person_urn, person_name, reason)
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_pending_invites() -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM invites WHERE status = 'pending' ORDER BY created_at ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def mark_invite_sent(invite_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE invites SET status='sent', sent_at = ? WHERE id = ?", (datetime.now(), invite_id))
+    conn.commit()
+    conn.close()
+
+
+def mark_invite_failed(invite_id: int, reason: str = '') -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE invites SET status='failed' WHERE id = ?", (invite_id,))
+    # Also write an alert line for operator visibility
+    try:
+        with open(os.path.join(os.path.dirname(config.DB_PATH), 'alerts.log'), 'a', encoding='utf-8') as f:
+            f.write(f"{datetime.now().isoformat()} - Invite failed for id={invite_id}: {reason}\n")
+    except Exception:
+        pass
+    conn.commit()
+    conn.close()
+
+
+def get_today_invite_count() -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    today = datetime.now().date()
+    cursor.execute(
+        "SELECT COUNT(*) as count FROM invites WHERE DATE(sent_at) = ? AND status = 'sent'",
+        (today,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row['count'] if row else 0
+
+
+def enqueue_failed_action(action_type: str, payload: str, error: str = "", next_attempt=None) -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO failed_actions (action_type, payload, error, attempts, last_attempt, next_attempt) VALUES (?, ?, ?, ?, ?, ?)",
+        (action_type, payload, error, 0, None, next_attempt)
+    )
+    conn.commit()
+    last_id = cursor.lastrowid
+    conn.close()
+    return last_id
+
+
+def get_due_failed_actions(limit: int = 50) -> List[Dict[str, Any]]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT * FROM failed_actions WHERE next_attempt IS NULL OR next_attempt <= ? ORDER BY next_attempt ASC, created_at ASC LIMIT ?",
+        (datetime.now(), limit)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def update_failed_action_attempt(action_id: int, error: str, next_attempt) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE failed_actions SET attempts = attempts + 1, error = ?, last_attempt = ?, next_attempt = ? WHERE id = ?",
+        (error, datetime.now(), next_attempt, action_id)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_failed_action(action_id: int) -> None:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM failed_actions WHERE id = ?", (action_id,))
+    conn.commit()
+    conn.close()
+
+
+def bump_failed_action_next_attempt_now(action_id: int) -> None:
+    """Set the failed action's next_attempt to now so it becomes due immediately."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE failed_actions SET next_attempt = ?, last_attempt = ? WHERE id = ?",
+        (datetime.now(), datetime.now(), action_id)
+    )
     conn.commit()
     conn.close()
 

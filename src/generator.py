@@ -98,7 +98,7 @@ Output only the comment text, nothing else.
 """
 
 
-def generate_reply_prompt(comment_text: str, commenter_language: str, is_negative: bool = False) -> str:
+def generate_reply_prompt(comment_text: str, commenter_language: str, is_negative: bool = False, reply_as_user: bool = False) -> str:
     """Generate prompt for replying to a comment."""
     persona = get_persona_context()
     
@@ -118,14 +118,18 @@ This comment seems positive or neutral. Your reply should be:
 - Add value or continue the conversation
 - Be genuine and human
 """
-    
+    # If requested, bias the reply to sound explicitly like the persona (first-person).
+    user_guidance = ""
+    if reply_as_user:
+        user_guidance = f"\nReply AS {config.PERSONA_NAME} in the first person. Use 'I' statements, signpost personal experience briefly, and keep the voice consistent with the persona above.\n"
+
     return f"""{persona}
 
 Someone commented on your LinkedIn post:
 "{comment_text}"
 
 {tone_guidance}
-
+{user_guidance}
 Write a reply in {commenter_language}.
 
 Requirements:
@@ -182,3 +186,10 @@ Revise the draft with these constraints:
 
 Language: {language}
 """
+
+
+def generate_invite_message(person_name: str = "") -> str:
+    """Generate a short, personalized invite message to send with a connection request."""
+    persona = get_persona_context()
+    name_part = f"{person_name}, " if person_name else ""
+    return f"{persona}\n\nWrite a concise (1-2 sentence) LinkedIn connection message to {name_part}that explains why you'd like to connect and gives a reason relevant to {config.PERSONA_ROLE} and interests: {config.INTERESTS}. Keep it friendly, professional, and in first-person. Output only the message text." 

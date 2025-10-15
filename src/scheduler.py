@@ -15,9 +15,79 @@ from .moderation import should_post_content
 from .commenter import generate_reply
 from .proactive import get_approved_targets, mark_posted
 from .utils import get_istanbul_time, get_random_post_time, get_reply_delay_seconds, format_source_name
+from .generator import generate_invite_message
+from .config import config
 
 
 scheduler = None
+
+
+def _choose_tags_for_text(text: str) -> list:
+    """Choose 1-3 tags based on config.INTERESTS and the post text.
+
+    Heuristic:
+    - Build a pool from CONFIG.INTERESTS.
+    - If interests appear in the text, prefer those (preserve pool order).
+    - Desired number depends on text length: short=1, medium=2, long=3.
+    - Fallback to the first N from pool.
+    """
+    try:
+        pool = [p.strip() for p in (config.INTERESTS or '').split(',') if p.strip()]
+    except Exception:
+        pool = []
+    if not pool:
+        return []
+
+    txt = (text or '').lower()
+    # desired count by length
+    l = len(txt)
+    # base desired by length but cap by config
+    if l < 200:
+        desired = 1
+    elif l < 600:
+        desired = 2
+    else:
+        desired = 3
+    try:
+        max_allowed = int(config.TAGS_MAX_PER_POST or 3)
+    except Exception:
+        max_allowed = 3
+    desired = max(1, min(max_allowed, desired))
+
+    matches = [p for p in pool if p.lower() in txt]
+    if matches:
+        chosen = []
+        for p in pool:
+            if p in matches:
+                chosen.append(p)
+            if len(chosen) >= desired:
+                break
+        return chosen
+
+    # If Gemini available, ask it to suggest up to desired (or config max) tags
+    try:
+        from .gemini import generate_text
+        max_allowed = int(config.TAGS_MAX_PER_POST or 9)
+        ask_for = min(max_allowed, max(3, desired))
+        prompt = (
+            "Aşağıdaki gönderi için en alakalı 1 ile %d arasında hashtag öner. "
+            "Sadece virgülle ayrılmış kelimeler (hashtag sembolü olmadan) döndür.\n\n" % ask_for
+        )
+        prompt += "Gönderi: \n" + (text or "")[:2000]
+        if config.GOOGLE_API_KEY:
+            try:
+                resp = generate_text(prompt, temperature=0.2, max_tokens=120)
+                # parse comma separated
+                cand = [c.strip() for c in resp.replace('\n', ',').split(',') if c.strip()]
+                if cand:
+                    return cand[:max_allowed]
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # fallback
+    return pool[:desired]
 
 
 def run_daily_post():
@@ -60,16 +130,21 @@ def run_daily_post():
         turkish_summary = generate_text(summary_prompt, temperature=0.7)
         print(f"\nGenerated Turkish summary:\n{turkish_summary}\n")
         
+        # Choose tags intelligently based on post text
+        tags = _choose_tags_for_text(post_text)
+
         if config.DRY_RUN:
             print("[DRY_RUN] Would post:")
             print(f"  Main post: {post_text[:100]}...")
+            if tags:
+                print(f"  Hashtags: {' '.join('#'+t if not t.startswith('#') else t for t in tags)}")
             print(f"  Turkish summary (after 66s): {turkish_summary[:100]}...")
             return
         
         # Post to LinkedIn
         api = get_linkedin_api()
-        result = api.post_ugc(post_text)
-        
+        result = api.post_ugc(post_text, tags=tags)
+
         post_id = result.get("id", "")
         post_urn = result.get("urn", "")
         
@@ -173,9 +248,42 @@ def poll_and_reply_comments():
                     
                     # Save comment (will skip if already exists)
                     db.save_comment(comment_id, post['post_id'], comment_actor, comment_text)
+                    # If the comment mentions our persona, enqueue an invite suggestion
+                    try:
+                        from .commenter import comment_mentions_person
+                        if comment_mentions_person(comment_text):
+                            # Try to extract a name from the actor URN if available
+                            person_name = comment_actor.split(":")[-1] if comment_actor else ""
+                            db.enqueue_invite(comment_actor, person_name, reason=f"Mentioned on post {post['post_id']}")
+                            print(f"Enqueued invite suggestion for {comment_actor}")
+                    except Exception:
+                        pass
             
             except Exception as e:
-                print(f"Error listing comments for post {post['post_id']}: {e}")
+                err_str = str(e)
+                print(f"Warning: Error listing comments for post {post['post_id']}: {err_str}")
+                # If the error is permission/resource related, write an alert and do NOT enqueue retries
+                non_retryable = False
+                try:
+                    if '403' in err_str or 'ACCESS_DENIED' in err_str or 'RESOURCE_NOT_FOUND' in err_str or '404' in err_str:
+                        non_retryable = True
+                except Exception:
+                    non_retryable = False
+
+                if non_retryable:
+                    try:
+                        with open('data/alerts.log', 'a', encoding='utf-8') as f:
+                            f.write(f"{datetime.now().isoformat()} - list_comments permission/resource error for post {post['post_id']}: {err_str}\n")
+                    except Exception:
+                        pass
+                    # Do not enqueue for retries
+                    continue
+
+                # Otherwise enqueue for retry via failed_actions
+                try:
+                    db.enqueue_failed_action('list_comments', post_urn, err_str)
+                except Exception:
+                    pass
                 continue
         
         # Process unreplied comments
@@ -206,12 +314,23 @@ def poll_and_reply_comments():
                 def send_reply():
                     try:
                         # If the original comment has an id, use it as the parent so we reply to that comment
+                        if config.DRY_RUN:
+                            print(f"[DRY_RUN] Would reply to {comment['comment_id']}")
+                            # Do not mark replied in dry-run
+                            return
+
                         result = api.comment_on_post(post['post_urn'], reply_text, parent_comment_id=comment.get('comment_id'))
                         reply_id = result.get("id", "")
                         db.mark_comment_replied(comment['comment_id'], reply_id)
                         print(f"Replied to comment {comment['comment_id']}")
                     except Exception as e:
-                        print(f"Error sending reply: {e}")
+                        print(f"Warning: Error sending reply: {e}")
+                        # Enqueue failed action to retry posting this comment
+                        try:
+                            payload = f"{post['post_urn']}||{comment.get('comment_id') or ''}||{reply_text}"
+                            db.enqueue_failed_action('comment', payload, str(e))
+                        except Exception:
+                            pass
                 
                 if scheduler:
                     run_date = datetime.now() + timedelta(seconds=delay)
@@ -266,8 +385,40 @@ def process_proactive_queue():
         item = approved[0]
         
         if not item['target_urn']:
-            print(f"Skipping item {item['id']}: missing target_urn")
-            return
+            print(f"Item {item['id']} missing target_urn")
+            # If config allows, create a new share from the suggested comment + link
+            if config.AUTO_POST_DISCOVERED_AS_SHARE:
+                print(f"AUTO_POST_DISCOVERED_AS_SHARE enabled: creating a new share for item {item['id']}")
+                content = f"{item.get('suggested_comment','')}\n\nKaynak: {item.get('target_url','')}"
+                # Choose tags for proactive share based on suggested content
+                tags = _choose_tags_for_text(content)
+                if config.DRY_RUN:
+                    print(f"[DRY_RUN] Would create share: {content[:200]}")
+                    mark_posted(item['id'])
+                    return
+                try:
+                    api = get_linkedin_api()
+                    res = api.post_ugc(content, tags=tags)
+                    post_id = res.get('id','') if isinstance(res, dict) else ''
+                    post_urn = res.get('urn','') if isinstance(res, dict) else ''
+                    if not post_urn and post_id:
+                        post_urn = f"urn:li:share:{post_id}"
+                    if post_urn:
+                        db.save_post(post_id or '', post_urn, content, item.get('target_url'))
+                    mark_posted(item['id'])
+                    print(f"Created share for proactive item {item['id']} -> {post_urn}")
+                    return
+                except Exception as e:
+                    print(f"Failed to create share for item {item['id']}: {e}")
+                    # enqueue as failed action for later retry
+                    try:
+                        db.enqueue_failed_action('comment', f"{item.get('target_url')}||{item.get('id')}||{content}", str(e))
+                    except Exception:
+                        pass
+                    return
+            else:
+                print(f"Skipping item {item['id']}: missing target_urn and AUTO_POST_DISCOVERED_AS_SHARE disabled")
+                return
         
         print(f"Posting proactive comment to {item['target_url']}")
         print(f"Comment: {item['suggested_comment']}")
@@ -288,6 +439,205 @@ def process_proactive_queue():
         print(f"Error in proactive queue job: {e}")
         import traceback
         traceback.print_exc()
+
+
+def process_invites():
+    """Process pending invites: generate message, send via API, obey daily limits and batch sizes."""
+    print(f"\nProcessing invites at {get_istanbul_time()}")
+    try:
+        if not config.INVITES_ENABLED:
+            print("Invites are disabled in config")
+            return
+
+        # Respect configured invite hours window
+        now_hour = datetime.now().hour
+        start_h = getattr(config, 'INVITES_HOUR_START', 7)
+        end_h = getattr(config, 'INVITES_HOUR_END', 21)
+        if not (start_h <= now_hour < end_h):
+            print(f"Current hour {now_hour} outside invite window {start_h}-{end_h}")
+            return
+
+        today_count = db.get_today_invite_count()
+        remaining_daily = max(0, config.INVITES_MAX_PER_DAY - today_count)
+        if remaining_daily <= 0:
+            print(f"Invite daily limit reached: {today_count}/{config.INVITES_MAX_PER_DAY}")
+            return
+
+        # Determine per-hour quota and batch size
+        per_hour = max(1, int(getattr(config, 'INVITES_PER_HOUR', config.INVITES_BATCH_SIZE)))
+        batch = min(per_hour, int(config.INVITES_BATCH_SIZE), remaining_daily)
+        pending = db.get_pending_invites()[:batch]
+        if not pending:
+            print("No pending invites")
+            return
+
+        api = get_linkedin_api()
+        for inv in pending:
+            try:
+                person_urn = inv.get('person_urn')
+                person_name = inv.get('person_name') or ''
+                msg = generate_invite_message(person_name)
+                print(f"Sending invite to {person_urn} with message: {msg[:80]}...")
+                try:
+                    if config.DRY_RUN:
+                        print("[DRY_RUN] Would send invite")
+                    else:
+                        api.send_invite(person_urn, msg)
+                    db.mark_invite_sent(inv['id'])
+                    print(f"Invite sent/marked for {person_urn}")
+                except Exception as e:
+                    print(f"Failed to send invite to {person_urn}: {e}")
+                    continue
+            except Exception as e:
+                print(f"Error processing invite id {inv.get('id')}: {e}")
+                continue
+    except Exception as e:
+        print(f"Error in invite processing job: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def process_failed_actions():
+    """Process the failed_actions queue with retries and exponential backoff."""
+    print(f"\nProcessing failed actions at {get_istanbul_time()}")
+    try:
+        if not config.FAILED_ACTIONS_ENABLED:
+            print("Failed actions processing is disabled in config")
+            return
+
+        api = get_linkedin_api()
+        due = db.get_due_failed_actions(limit=50)
+        print(f"Found {len(due)} failed actions due")
+
+        for act in due:
+            aid = act['id']
+            action_type = act['action_type']
+            payload = act['payload'] or ''
+            attempts = int(act.get('attempts', 0) or 0)
+
+            def schedule_retry(err_msg: str):
+                nonlocal attempts
+                attempts += 1
+                max_r = config.FAILED_ACTIONS_MAX_RETRIES
+                base = config.FAILED_ACTION_RETRY_BASE_SECONDS
+                # If error looks like permission or resource missing, do not retry
+                non_retryable_indicators = ['403', 'ACCESS_DENIED', 'RESOURCE_NOT_FOUND', '404']
+                try:
+                    if any(ind in err_msg for ind in non_retryable_indicators):
+                        print(f"Non-retryable error for action {aid}: {err_msg}. Deleting and alerting.")
+                        try:
+                            with open('data/alerts.log', 'a', encoding='utf-8') as f:
+                                f.write(f"{datetime.now().isoformat()} - Non-retryable failed action {aid} ({action_type}) payload={payload}: {err_msg}\n")
+                        except Exception:
+                            pass
+                        db.delete_failed_action(aid)
+                        return
+                except Exception:
+                    pass
+
+                if attempts >= max_r:
+                    print(f"Action {aid} reached max retries ({attempts}), removing: {err_msg}")
+                    db.delete_failed_action(aid)
+                else:
+                    next_seconds = base * (2 ** (attempts - 1))
+                    next_attempt = datetime.now() + timedelta(seconds=next_seconds)
+                    db.update_failed_action_attempt(aid, str(err_msg), next_attempt)
+                    print(f"Scheduled retry #{attempts} for action {aid} in {next_seconds}s: {err_msg}")
+
+            try:
+                if action_type == 'invite':
+                    parts = payload.split('||')
+                    person_urn = parts[0] if parts else ''
+                    message = '||'.join(parts[2:]) if len(parts) >= 3 else (parts[1] if len(parts) > 1 else '')
+
+                    if config.DRY_RUN:
+                        print(f"[DRY_RUN] Would retry invite to {person_urn}")
+                        db.delete_failed_action(aid)
+                        continue
+
+                    api.send_invite(person_urn, message)
+                    db.delete_failed_action(aid)
+                    print(f"Retried invite sent to {person_urn}")
+
+                elif action_type == 'comment':
+                    parts = payload.split('||')
+                    post_urn = parts[0] if parts else ''
+                    parent = parts[1] if len(parts) > 2 else None
+                    message = '||'.join(parts[2:]) if len(parts) > 2 else (parts[-1] if parts else '')
+
+                    if config.DRY_RUN:
+                        print(f"[DRY_RUN] Would retry comment to {post_urn}")
+                        db.delete_failed_action(aid)
+                        continue
+
+                    api.comment_on_post(post_urn, message, parent_comment_id=parent)
+                    db.delete_failed_action(aid)
+                    print(f"Retried comment posted to {post_urn}")
+
+                elif action_type == 'list_comments':
+                    # payload expected to be the post URN
+                    post_urn = payload
+                    try:
+                        comments = api.list_comments(post_urn)
+                        # If we can list comments now, delete the failed action. We don't auto-reply here.
+                        db.delete_failed_action(aid)
+                        print(f"Successfully listed comments for {post_urn}; removed failed action {aid}")
+                    except Exception as e:
+                        schedule_retry(str(e))
+
+                else:
+                    print(f"Unknown failed action type: {action_type}, deleting to avoid loop")
+                    db.delete_failed_action(aid)
+
+            except Exception as e:
+                # Special handling: if invite exceeded retries, mark invite failed in invites table
+                err = str(e)
+                # If it's an invite and this attempt exhausted retries, mark pending invites as failed
+                if action_type == 'invite':
+                    # compute next or mark failed depending on attempts
+                    if attempts + 1 >= config.FAILED_ACTIONS_MAX_RETRIES:
+                        try:
+                            parts = payload.split('||')
+                            person_urn = parts[0] if parts else None
+                            if person_urn:
+                                pending_invs = db.get_pending_invites()
+                                for inv in pending_invs:
+                                    if inv.get('person_urn') == person_urn:
+                                        db.mark_invite_failed(inv['id'], err)
+                        except Exception:
+                            pass
+                        db.delete_failed_action(aid)
+                        print(f"Invite action {aid} reached max retries and was marked failed: {err}")
+                    else:
+                        schedule_retry(err)
+                else:
+                    schedule_retry(err)
+
+    except Exception as e:
+        print(f"Error in failed actions processor: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def monitor_failures():
+    """Lightweight monitoring job: report counts of failed actions and prune very old entries."""
+    try:
+        from . import db
+        due = db.get_due_failed_actions(limit=1000)
+        cnt = len(due)
+        if cnt:
+            print(f"Monitor: {cnt} failed actions currently queued")
+        # Prune items older than 30 days to avoid DB growth
+        try:
+            conn = db.get_connection()
+            cur = conn.cursor()
+            cur.execute("DELETE FROM failed_actions WHERE created_at <= datetime('now','-30 days')")
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def schedule_daily_post():
@@ -343,6 +693,30 @@ def start_scheduler():
         process_proactive_queue,
         IntervalTrigger(hours=1),
         id='proactive_queue',
+        replace_existing=True
+    )
+
+    # Process invites every hour (if enabled)
+    invite_job = scheduler.add_job(
+        process_invites,
+        IntervalTrigger(hours=1),
+        id='process_invites',
+        replace_existing=True
+    )
+
+    # Process failed actions frequently (every 10 minutes)
+    failed_job = scheduler.add_job(
+        process_failed_actions,
+        IntervalTrigger(minutes=10),
+        id='process_failed_actions',
+        replace_existing=True
+    )
+
+    # Monitoring job
+    monitor_job = scheduler.add_job(
+        monitor_failures,
+        IntervalTrigger(minutes=30),
+        id='monitor_failures',
         replace_existing=True
     )
     

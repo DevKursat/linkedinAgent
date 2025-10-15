@@ -45,6 +45,14 @@ class LinkedInAPI:
         for v in fallbacks:
             if v and v not in versions:
                 versions.append(v)
+        # Add a small sweep of recent versions as additional fallbacks to increase
+        # chances of matching the app's accepted LinkedIn-Version header.
+        extra_candidates = [
+            "202501", "202410", "202409", "202408", "202407", "202405", "202401",
+        ]
+        for c in extra_candidates:
+            if c not in versions:
+                versions.append(c)
         # Ensure we always try at least one default if nothing configured
         if not versions:
             versions.append("202405")
@@ -189,13 +197,29 @@ class LinkedInAPI:
             raise
 
     # Posting and comments
-    def post_ugc(self, text: str, visibility: str = "PUBLIC") -> Dict[str, Any]:
+    def post_ugc(self, text: str, visibility: str = "PUBLIC", tags: Optional[List[str]] = None) -> Dict[str, Any]:
         """Post to LinkedIn using the new Posts API (v3)."""
         me = self.me()
         person_id = me['id']
         author_urn = f"urn:li:person:{person_id}"
         
         # LinkedIn API v3 Posts endpoint
+        # If tags provided, append them as hashtags to the commentary text
+        if tags:
+            cleaned = []
+            for t in tags:
+                t = t.strip()
+                if not t:
+                    continue
+                if not t.startswith('#'):
+                    # sanitize basic characters for hashtag
+                    tag = re.sub(r'[^0-9A-Za-z_ğüşöçıİĞÜŞÖÇ-]', '', t.replace(' ', ''))
+                    cleaned.append('#' + tag)
+                else:
+                    cleaned.append(t)
+            if cleaned:
+                text = text.rstrip() + "\n\n" + " ".join(cleaned)
+
         payload = {
             "author": author_urn,
             "commentary": text,
@@ -417,6 +441,82 @@ class LinkedInAPI:
             with httpx.Client(timeout=30, headers=self._headers()) as c:
                 r = c.post(endpoint, json=payload)
                 r.raise_for_status()
+
+    def send_invite(self, person_urn: str, message: str = "") -> Dict[str, Any]:
+        """Send a connection invite to the given person URN. Best-effort: try REST then v2."""
+        if not person_urn.startswith("urn:"):
+            raise ValueError("person_urn must be a full URN like 'urn:li:person:xxxxx'")
+
+        # Prefer REST invitations endpoint if available
+        if self._rest_allowed():
+            versions_to_try = self._rest_versions()
+            tried = []
+            while versions_to_try:
+                v = versions_to_try.pop(0)
+                if v in tried:
+                    continue
+                tried.append(v)
+                # Try a couple of REST endpoint/payload shapes to increase compatibility
+                rest_paths = [
+                    f"{API_V3_BASE}/growth/invitations",
+                    f"{API_V3_BASE}/invitations",
+                ]
+                for path in rest_paths:
+                    try:
+                        payload = {
+                            "invitee": {"com.linkedin.voyager.growth.invitation.InviteeProfile": {"profileUrn": person_urn}},
+                            "message": message
+                        }
+                        with httpx.Client(timeout=30, headers=self._headers_v3(v)) as c:
+                            r = c.post(path, json=payload)
+                            r.raise_for_status()
+                            self._mark_rest_success()
+                            return r.json()
+                    except httpx.HTTPStatusError as e:
+                        print(f"Invite v3 failed (version {v}, path {path}): {e.response.status_code} - {e.response.text}")
+                        if e.response.status_code == 426:
+                            if self._rest_enabled_config:
+                                self._disable_rest(f"LinkedIn returned 426 for version {v}")
+                                versions_to_try = []
+                        # try next path
+                        continue
+                    except Exception as e:
+                        print(f"Invite v3 error (version {v}, path {path}): {e}")
+                        continue
+
+        # Fallback to legacy v2 endpoint if exists (best-effort)
+        # Try legacy v2 with a couple payload shapes
+        legacy_paths = [f"{API_BASE}/growth/invitations", f"{API_BASE}/invitations"]
+        for path in legacy_paths:
+            try:
+                payload = {"invitee": {"profile": person_urn}, "message": message}
+                with httpx.Client(timeout=30, headers=self._headers()) as c:
+                    r = c.post(path, json=payload)
+                    r.raise_for_status()
+                    return r.json()
+            except httpx.HTTPStatusError as e:
+                print(f"Invite legacy failed (path {path}): {e.response.status_code} - {e.response.text}")
+                continue
+            except Exception as e:
+                print(f"Invite legacy error (path {path}): {e}")
+                continue
+
+        # If all creation attempts fail, write an alert for operator visibility and raise
+        try:
+            # Try to capture last HTTP error details if available
+            err_text = ""
+            try:
+                # `e` may be last exception from loop; guard access
+                err_text = f"{getattr(e, 'response', '')}"
+            except Exception:
+                err_text = ""
+
+            with open('data/alerts.log', 'a', encoding='utf-8') as f:
+                f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Invite failed for {person_urn}: {err_text}\n")
+        except Exception:
+            # Best-effort logging only
+            pass
+        raise RuntimeError("Invite endpoints exhausted or not available for this app")
 
     def list_comments(self, ugc_urn: str, count: int = 50) -> List[Dict[str, Any]]:
         social_urn = ugc_urn if ugc_urn.startswith("urn:") else f"urn:li:share:{ugc_urn}"
