@@ -1,6 +1,7 @@
 """Flask web application for LinkedIn Agent."""
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, flash
 import secrets
+import os
 from . import db
 from .config import config
 from .linkedin_api import LinkedInAPI, get_linkedin_api
@@ -374,6 +375,23 @@ def health():
         'time': str(get_istanbul_time()),
         'dry_run': config.DRY_RUN,
     }), 200
+
+
+@app.route('/debug/last-invite-error')
+def debug_last_invite_error():
+    """Return last lines from alerts.log or a helpful message for invite errors."""
+    log_dir = os.path.dirname(db.get_connection().__dict__.get('database', config.DB_PATH)) if hasattr(db, 'get_connection') else os.path.dirname(config.DB_PATH)
+    alerts = os.path.join(log_dir, 'alerts.log')
+    try:
+        if os.path.exists(alerts):
+            with open(alerts, 'r', encoding='utf-8') as f:
+                lines = f.read().strip().splitlines()
+            tail = lines[-20:]
+            return jsonify({'ok': True, 'alerts_tail': tail}), 200
+        else:
+            return jsonify({'ok': False, 'error': 'alerts.log not found', 'path': alerts}), 404
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 @app.route('/login')
