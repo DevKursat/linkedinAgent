@@ -10,3 +10,10 @@ feedparser==6.0.10
 rich==13.7.0
 gunicorn==21.2.0
 Werkzeug==3.0.1
+
+# Additional runtime/test helpers
+requests>=2.30.0
+beautifulsoup4>=4.12.2
+
+# Test
+pytest>=7.0.0
