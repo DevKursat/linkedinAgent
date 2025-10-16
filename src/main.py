@@ -270,6 +270,9 @@ INVITES_TEMPLATE = """
         <div class="invite" data-id="{{ i.id }}">
             <strong>{{ i.person_name or i.person_urn }}</strong><br/>
             <em>{{ i.reason }}</em><br/>
+            {% if i.profile_url %}
+                — <a href="{{ i.profile_url }}" target="_blank" class="tm-profile">Profil</a><br/>
+            {% endif %}
             <form method="POST" action="{{ url_for('send_invite_route', invite_id=i.id) }}" style="display:inline;">
                 <button class="button">Sunucudan Gönder</button>
             </form>
@@ -302,6 +305,25 @@ INVITES_TEMPLATE = """
 {% else %}
     <div>Önerilen hesap yok</div>
 {% endif %}
+
+<div style="margin-top:12px">
+    <button class="button" onclick="startTamperFlow()">Tarayıcı ile Otomatik Davet Başlat (Tampermonkey gerektirir)</button>
+    <small style="display:block;margin-top:6px;color:#666">Not: Tampermonkey kullanıcı script'i yüklü ve aktif olmalıdır. İlk profil yeni sekmede açılacak, ardından kullanıcı onayı istenecektir.</small>
+</div>
+
+<script>
+function startTamperFlow(){
+    // Collect profile links from the page (suggested accounts and pending invites)
+    const anchors = Array.from(document.querySelectorAll('a[href*="linkedin.com/in/"]'));
+    const urls = [];
+    anchors.forEach(a=>{ try{ if(a.href && a.href.indexOf('linkedin.com/in/')!==-1){ urls.push(a.href); } }catch(e){} });
+    if(!urls.length){ alert('Sayfada linkedin profil linki bulunamadı. Lütfen önerilen hesapların Profil bağlantılarını kontrol edin.'); return; }
+    const first = urls[0];
+    const sep = (first.indexOf('?')===-1) ? '?' : '&';
+    const target = first + sep + 'tm_send=1&tm_idx=0&tm_from=' + encodeURIComponent(window.location.origin + window.location.pathname);
+    window.location.href = target;
+}
+</script>
 
 <script>
 async function markSent(id, btn) {
