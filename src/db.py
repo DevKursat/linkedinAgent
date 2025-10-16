@@ -369,7 +369,7 @@ def mark_queue_item_posted(item_id: int):
     conn.close()
 
 
-def enqueue_invite(person_urn: str, person_name: str, reason: str = "") -> None:
+def enqueue_invite(person_urn: str, person_name: str, reason: str = "") -> int:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -377,7 +377,9 @@ def enqueue_invite(person_urn: str, person_name: str, reason: str = "") -> None:
         (person_urn, person_name, reason)
     )
     conn.commit()
+    last_id = cursor.lastrowid
     conn.close()
+    return last_id
 
 
 def get_pending_invites() -> List[Dict[str, Any]]:
@@ -395,6 +397,61 @@ def mark_invite_sent(invite_id: int) -> None:
     cursor.execute("UPDATE invites SET status='sent', sent_at = ? WHERE id = ?", (datetime.now(), invite_id))
     conn.commit()
     conn.close()
+
+
+def get_invite_stats(days: int = 7) -> Dict[str, Any]:
+    """Return invite statistics for the given window.
+
+    Returns a dict: { total_sent, accepted, rejected, acceptance_rate }
+    Acceptance rate is percentage (0-100) or 0 if no sent invites.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        if days and isinstance(days, int) and days > 0:
+            since = datetime.now() - timedelta(days=days)
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE status='sent' AND sent_at >= ?", (since,))
+            total_sent = cursor.fetchone()['cnt'] or 0
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE accepted_at IS NOT NULL AND accepted_at >= ?", (since,))
+            accepted = cursor.fetchone()['cnt'] or 0
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE rejected_at IS NOT NULL AND rejected_at >= ?", (since,))
+            rejected = cursor.fetchone()['cnt'] or 0
+        else:
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE status='sent'")
+            total_sent = cursor.fetchone()['cnt'] or 0
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE accepted_at IS NOT NULL")
+            accepted = cursor.fetchone()['cnt'] or 0
+            cursor.execute("SELECT COUNT(*) as cnt FROM invites WHERE rejected_at IS NOT NULL")
+            rejected = cursor.fetchone()['cnt'] or 0
+
+        acceptance_rate = 0.0
+        if total_sent > 0:
+            acceptance_rate = round((accepted / float(total_sent)) * 100.0, 1)
+
+        return {
+            'total_sent': int(total_sent),
+            'accepted': int(accepted),
+            'rejected': int(rejected),
+            'acceptance_rate': acceptance_rate,
+        }
+    except Exception:
+        return {'total_sent': 0, 'accepted': 0, 'rejected': 0, 'acceptance_rate': 0.0}
+    finally:
+        conn.close()
+
+
+def get_recent_sent_invites(limit: int = 5) -> List[Dict[str, Any]]:
+    """Return most recent sent invites."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM invites WHERE status='sent' ORDER BY sent_at DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
 
 
 def mark_invite_failed(invite_id: int, reason: str = '') -> None:

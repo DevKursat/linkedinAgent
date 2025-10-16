@@ -10,6 +10,7 @@ from .utils import get_istanbul_time
 from .proactive import discover_and_enqueue
 from .gemini import generate_text
 from .generator import generate_refine_post_prompt, generate_invite_message
+from .connections import get_suggested_accounts_for_connections
 from .diagnostics import doctor as diag_doctor
 from .comment_handler import handle_incoming_comment
 
@@ -247,6 +248,23 @@ INVITES_TEMPLATE = """
 <body>
 <h1>Bekleyen Davetler</h1>
 <a href="{{ url_for('index') }}">← Geri</a>
+<div style="margin-top:12px; padding:8px; background:#f6f8fa; border-radius:4px">
+    <strong>Davet İstatistikleri (30 gün):</strong>
+    <div>Toplam gönderilen: {{ invite_stats.total_sent }}</div>
+    <div>Onay oranı: {{ invite_stats.acceptance_rate }}%</div>
+</div>
+
+<h3>Son Gönderilen Davetler</h3>
+{% set recent = db.get_recent_sent_invites(5) %}
+{% if recent %}
+    <ul>
+    {% for r in recent %}
+        <li>{{ r.person_name or r.person_urn }} — gönderildi: {{ r.sent_at }}</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <div>Henüz gönderilen davet yok</div>
+{% endif %}
 {% if invites %}
     {% for i in invites %}
         <div class="invite" data-id="{{ i.id }}">
@@ -261,6 +279,28 @@ INVITES_TEMPLATE = """
     {% endfor %}
 {% else %}
     <div>Bekleyen davet yok</div>
+{% endif %}
+
+<h2>Önerilen Hesaplar</h2>
+{% if suggested_accounts %}
+    <ul>
+    {% for s in suggested_accounts %}
+        <li>
+            <strong>{{ s.name or (s.urn or 'Profil') }}</strong>
+            {% if s.profile_url %}
+                — <a href="{{ s.profile_url }}" target="_blank">Profil</a>
+            {% endif %}
+            {% if s.urn %}
+                <form method="POST" action="{{ url_for('send_invite_ui') }}" style="display:inline; margin-left:8px">
+                    <input type="hidden" name="profile" value="{{ s.profile_url or s.urn }}" />
+                    <button class="button" type="submit">Davet Gönder (Test)</button>
+                </form>
+            {% endif %}
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <div>Önerilen hesap yok</div>
 {% endif %}
 
 <script>
@@ -440,7 +480,24 @@ def invites():
         items = db.get_pending_invites()
     except Exception:
         items = []
-    return render_template_string(INVITES_TEMPLATE, invites=items, generate_invite_message=generate_invite_message)
+    # Fetch suggested accounts defensively
+    try:
+        suggested = get_suggested_accounts_for_connections(limit=8)
+    except Exception:
+        suggested = []
+    # Fetch invite statistics (defensive)
+    try:
+        invite_stats = db.get_invite_stats(days=30)
+    except Exception:
+        invite_stats = {'total_sent': 0, 'accepted': 0, 'rejected': 0, 'acceptance_rate': 0.0}
+
+    return render_template_string(
+        INVITES_TEMPLATE,
+        invites=items,
+        generate_invite_message=generate_invite_message,
+        suggested_accounts=suggested,
+        invite_stats=invite_stats,
+    )
 
 
 @app.route('/send-invite/<int:invite_id>', methods=['POST'])
@@ -554,6 +611,48 @@ def send_suggested_invite():
         flash('Davet gönderildi: ' + (person_urn or '') + ' — API cevap: ' + str(res), 'success')
     except Exception as e:
         flash('Davet gönderme hatası: ' + str(e), 'error')
+    return redirect(url_for('index'))
+
+
+@app.route('/test-full-flow', methods=['POST'])
+def test_full_flow():
+    """Trigger a full share -> like -> comment -> reply flow for a sample article.
+
+    This uses DRY_RUN logic: if DRY_RUN is true, actions are recorded but not sent.
+    """
+    sample_url = request.form.get('sample_url', 'https://example.com')
+    # 1) Publish share (Kürşat style)
+    try:
+        from .comment_handler import publish_share
+        res = publish_share(sample_url, comment_as='Kürşat')
+    except Exception as e:
+        flash('Paylaşım testi hatası: ' + str(e), 'error')
+        return redirect(url_for('index'))
+
+    # 2) If posted, attempt to like and then comment
+    try:
+        if res.get('status') == 'sent' and not config.DRY_RUN:
+            post_urn = None
+            if isinstance(res.get('response'), dict):
+                post_urn = res['response'].get('urn') or res['response'].get('id')
+            # like
+            if post_urn:
+                api = get_linkedin_api()
+                try:
+                    api.like_post(post_urn)
+                except Exception:
+                    pass
+                # comment
+                try:
+                    api = get_linkedin_api()
+                    api.comment_on_post(post_urn, 'Güzel haber, teşekkürler! — Kürşat')
+                except Exception:
+                    pass
+
+    except Exception:
+        pass
+
+    flash('Full flow test tetiklendi. Sonuç: ' + str(res.get('status')), 'success')
     return redirect(url_for('index'))
 
 
