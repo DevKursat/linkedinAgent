@@ -256,7 +256,6 @@ INVITES_TEMPLATE = """
 </div>
 
 <h3>Son Gönderilen Davetler</h3>
-{% set recent = db.get_recent_sent_invites(5) %}
 {% if recent %}
     <ul>
     {% for r in recent %}
@@ -491,6 +490,10 @@ def invites():
         invite_stats = db.get_invite_stats(days=30)
     except Exception:
         invite_stats = {'total_sent': 0, 'accepted': 0, 'rejected': 0, 'acceptance_rate': 0.0}
+    try:
+        recent = db.get_recent_sent_invites(5)
+    except Exception:
+        recent = []
 
     return render_template_string(
         INVITES_TEMPLATE,
@@ -498,6 +501,7 @@ def invites():
         generate_invite_message=generate_invite_message,
         suggested_accounts=suggested,
         invite_stats=invite_stats,
+        recent=recent,
     )
 
 
