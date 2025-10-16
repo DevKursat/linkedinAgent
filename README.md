@@ -227,12 +227,62 @@ Notes about PC sleep and availability:
 
 ## Getting full permissions for comment-listing & invites
 
-To enable full automation (reading comments on external posts, sending invites), request the following from LinkedIn:
+To enable full automation (reading comments on external posts, sending invites), follow the steps below. Use the exact text and curl snippets in your App Review submission to speed up approval.
 
-- Request scopes: `w_member_social`, `r_member_social`, and any specific growth/invitations scope your app requires.
-- Provide a clear use-case justification in the LinkedIn App review explaining automated moderation, persona, and safety controls. Save that justification text in `docs/linkedin_permission_request.md` (not included yet) and provide audit logs when asked.
+1) Required scopes
 
-If you want, I can draft the permission request justification for you.
+- `w_member_social` — post on behalf of member
+- `r_liteprofile` / `r_member_social` — (as required for your flows)
+- invitations scope (LinkedIn may require a specific growth/invitations scope or manual approval). Include this phrase in your request: "Requesting permission to create connection invitations on behalf of authenticated users as part of an explicit consented flow."
+
+2) App Review submission text (copy-paste)
+
+Title: Requesting invitations.CREATE permission for linkedinAgent
+
+Description (copy/paste):
+```
+linkedinAgent is a personal assistant that helps users grow their professional network by suggesting and sending connection invitations as part of a consented workflow. The feature is disabled by default and only runs when the authenticated user or operator explicitly enables it via the app UI. 
+
+We will only send invitations on behalf of authenticated users who have explicitly granted permission. The app enforces rate limits, message templates, and manual confirmation fallbacks to avoid spam or policy violations. If server-side invitation API calls fail or are not available, the app falls back to a browser-assisted, user-confirmed flow (manual export + Tampermonkey) so no invitations are sent without human oversight.
+
+Requested permission: invitations.CREATE (or the equivalent scope LinkedIn requires for server-side invitation creation).
+
+Use-case: Allow linkedinAgent to create connection invitations on behalf of authenticated users as part of an explicit, consented workflow where the user triggers or approves the invites via the app UI.
+```
+
+3) Example request (curl) to include in the submission
+
+```bash
+curl -X POST 'https://api.linkedin.com/v2/invitations' \
+	-H 'Authorization: Bearer <ACCESS_TOKEN>' \
+	-H 'Content-Type: application/json' \
+	-d '{
+		"invitee": {"com.linkedin.voyager.growth.invitation.InviteeProfile": {"profileUrn": "urn:li:person:TARGET_ID"}},
+		"message": "Merhaba, sizi profesyonel ağımda görmek isterim. Selamlar, Kürşat."
+	}'
+```
+
+4) Screenshots to attach
+
+- `/invites` UI with pending invites and the "Send (server)" button.
+- Network console showing the POST request and its 403/404 response (so LinkedIn reviewers can reproduce why the app needs permission).
+- `data/manual_invites.html` / Tampermonkey flow screenshot (shows fallback behavior and human confirmation UI).
+
+5) How to enable invites safely (local test)
+
+Edit `.env` and set:
+```
+INVITES_ENABLED=true
+DRY_RUN=false
+```
+Then restart containers. Note: if LinkedIn has not granted invitations.CREATE to your app, server-side calls will still return 403/404. In that case use the manual export + Tampermonkey flow (described below).
+
+6) Quick remediation if API returns 403/404
+
+- Use `/debug/last-invite-error` endpoint to fetch recent alert lines: `curl http://localhost:5000/debug/last-invite-error`
+- Check `data/alerts.log` for saved failure lines.
+
+If you'd like, I can prepare the screenshots and the exact network console captures for you and add them to `docs/`.
 
 ## Troubleshooting
 
