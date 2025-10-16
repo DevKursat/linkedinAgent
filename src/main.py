@@ -10,6 +10,7 @@ from .utils import get_istanbul_time
 from .proactive import discover_and_enqueue
 from .gemini import generate_text
 from .generator import generate_refine_post_prompt, generate_invite_message
+from .manual_export import export_manual_invites_html
 from .connections import get_suggested_accounts_for_connections
 from .diagnostics import doctor as diag_doctor
 from .comment_handler import handle_incoming_comment
@@ -514,7 +515,12 @@ def send_invite_route(invite_id):
         db.mark_invite_sent(invite_id)
         flash('Invite sent (server): ' + str(res), 'success')
     except Exception as e:
-        flash('Invite send error: ' + str(e), 'error')
+        # On failure, create a manual export so operator can send invites via browser
+        try:
+            path = export_manual_invites_html(db.get_pending_invites())
+            flash('Invite send error: ' + str(e) + f" — manual export created: {path}", 'error')
+        except Exception:
+            flash('Invite send error: ' + str(e), 'error')
     return redirect(url_for('invites'))
 
 
@@ -582,7 +588,12 @@ def send_invite_ui():
             res = api.send_invite(person_urn, msg)
             send_result = res
         except Exception as e:
-            flash('Sunucu davet denemesi hata: ' + str(e), 'error')
+            # On failure, export manual invites and notify
+            try:
+                path = export_manual_invites_html(db.get_pending_invites())
+                flash('Sunucu davet denemesi hata: ' + str(e) + f" — manual export: {path}", 'error')
+            except Exception:
+                flash('Sunucu davet denemesi hata: ' + str(e), 'error')
             return redirect(url_for('index'))
 
     # Show the invited profile URL so user can verify
