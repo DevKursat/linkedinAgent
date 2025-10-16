@@ -1,4 +1,11 @@
+import sys
+import os
 import pytest
+
+# Ensure project root is on sys.path for test discovery when running from CI or locally
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
 
 from src import comment_handler as ch
 
