@@ -316,6 +316,10 @@ Expected output: All 6 tests should pass.
 
 See [VERIFICATION.md](VERIFICATION.md) for detailed implementation verification and acceptance criteria.
 
+---
+
+Release: v1.0.0 — finalizing invites & app-review package. Download the App Review package from the release: https://github.com/DevKursat/linkedinAgent/releases/tag/v1.0-invites-ready
+
 ## Deploying with GitHub Actions and GHCR
 
 On push to `main`:
