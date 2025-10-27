@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+
+    <div class="card">
+        <h3>Sistem Durumu</h3>
+        <p><strong>LinkedIn Girişi:</strong> {{ 'Yapıldı ✓' if authenticated else 'Yapılmadı' }}</p>
+        <p><strong>Sıradaki Görevler:</strong></p>
+        <ul>
+            <li>Günlük paylaşım: {{ next_runs.get('daily_post','-') }}</li>
+            <li>Yorum kontrolü: {{ next_runs.get('poll_comments','-') }}</li>
+            <li>Proaktif kuyruk: {{ next_runs.get('proactive_queue','-') }}</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>Hızlı İşlemler</h3>
+        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline-block;">
+            <input type="hidden" name="job" value="daily_post">
+            <button class="button" type="submit">Paylaşım Yap</button>
+        </form>
+        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline-block;">
+            <input type="hidden" name="job" value="poll_comments">
+            <button class="button" type="submit">Yorumları Kontrol Et</button>
+        </form>
+        <form method="POST" action="{{ url_for('discover') }}" style="display:inline-block;">
+            <button class="button" type="submit">Gönderi Keşfet</button>
+        </form>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+        <h3>Son Paylaşımlar</h3>
+        {% if posts %}
+            {% for post in posts %}
+            <div style="border-bottom: 1px solid var(--border-color); padding: 10px 0;">
+                <strong>{{ post.posted_at }}</strong>
+                <p style="margin: 5px 0;">{{ post.content[:200] }}...</p>
+                {% if post.follow_up_posted %}<span style="color: var(--success-color); font-size: 12px;">✓ Türkçe özet eklendi</span>{% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>Henüz paylaşım yok.</p>
+        {% endif %}
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+        <h3>Son Sistem Olayları</h3>
+        {% if events %}
+            {% for event in events %}
+            <div style="border-bottom: 1px solid var(--border-color); padding: 10px 0; font-size: 14px;">
+                <strong style="color: {{ 'var(--error-color)' if 'failed' in event.event_type else 'var(--text-color)' }}">{{ event.event_type }}</strong>
+                <p style="margin: 5px 0;">{{ event.details }}</p>
+                <small style="color: var(--muted-text-color);">{{ event.created_at }}</small>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p>Kaydedilmiş sistem olayı yok.</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Manuel Paylaşım</h3>
+        <form method="POST" action="{{ url_for('manual_post') }}">
+            <div class="form-group">
+                <textarea name="content" rows="5" placeholder="Gönderi metnini buraya yazın..." required>{{ refined_text or '' }}</textarea>
+            </div>
+            <button type="submit" class="button">Paylaş</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>AI ile Metin Geliştir</h3>
+        <form method="POST" action="{{ url_for('refine_post') }}">
+            <div class="form-group">
+                <textarea name="draft" rows="5" placeholder="Geliştirmek istediğiniz metin taslağını buraya yapıştırın..."></textarea>
+            </div>
+            <button type="submit" class="button">Geliştir</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
