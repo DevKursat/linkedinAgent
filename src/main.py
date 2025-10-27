@@ -1,5 +1,5 @@
 """Flask web application for LinkedIn Agent."""
-from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 import secrets
 import os
 from . import db
@@ -17,328 +17,12 @@ from .diagnostics import doctor as diag_doctor
 from .comment_handler import handle_incoming_comment
 
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = config.FLASK_SECRET_KEY
 
 
 # Initialize database on startup
 db.init_db()
-
-
-# HTML Templates (inline for simplicity)
-INDEX_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <title>LinkedIn Ajan - Durum</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
-        h1 { color: #0077b5; }
-        .status { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0; }
-        .info { margin: 10px 0; }
-        .button { display: inline-block; padding: 10px 20px; background: #0077b5; color: white; 
-                  text-decoration: none; border-radius: 5px; margin: 5px; border: none; cursor: pointer; }
-        .button:hover { background: #005885; }
-        textarea, input[type="text"] { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-        .checklist { list-style: none; padding-left: 0; }
-        .checklist li { margin: 6px 0; padding-left: 4px; }
-        .checklist .done { color: #1f7a1f; font-weight: bold; }
-    </style>
-</head>
-<body>
-        <h1>LinkedIn Ajan</h1>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="status" style="background: {{ '#ffe0e0' if category=='error' else '#e7ffe7' }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    
-    <div class="status">
-        <h2>Durum</h2>
-        <div class="info"><strong>Zaman:</strong> {{ time }}</div>
-        <div class="info"><strong>Saat Dilimi:</strong> {{ timezone }}</div>
-        <div class="info"><strong>Test Modu:</strong> {{ 'Açık' if dry_run else 'Kapalı (Canlı)' }}</div>
-        <div class="info"><strong>LinkedIn Girişi:</strong> {{ 'Yapıldı ✓' if authenticated else 'Yapılmadı' }}</div>
-        {% if persona %}
-        <div class="info"><strong>Kişilik:</strong> {{ persona.name }}, {{ persona.age }}, {{ persona.role }}</div>
-        {% endif %}
-        <div class="info"><strong>Zamanlanmış İşler:</strong>
-            <ul>
-                <li>Günlük paylaşım: {{ next_runs.get('daily_post','-') }}</li>
-                <li>Yorum kontrolü: {{ next_runs.get('poll_comments','-') }}</li>
-                <li>Proaktif kuyruk: {{ next_runs.get('proactive_queue','-') }}</li>
-            </ul>
-        </div>
-    </div>
-
-    <div class="status">
-        <h2>İşlemler</h2>
-        {% if not authenticated %}
-        <a href="{{ url_for('login') }}" class="button">LinkedIn ile Giriş Yap</a>
-        {% else %}
-        <a href="{{ url_for('logout') }}" class="button" style="background: #dc3545;">Çıkış Yap</a>
-        {% endif %}
-        <a href="{{ url_for('health') }}" class="button">Sağlık Kontrolü</a>
-        <a href="{{ url_for('diagnostics') }}" class="button">Tanılama</a>
-        <a href="{{ url_for('queue') }}" class="button">Proaktif Kuyruk</a>
-        <form method="POST" action="{{ url_for('discover') }}" style="display:inline;">
-            <button class="button" type="submit">İlgili Gönderileri Bul</button>
-        </form>
-        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
-            <input type="hidden" name="job" value="daily_post">
-            <button class="button" type="submit">Günlük Paylaşımı Şimdi Yap</button>
-        </form>
-        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
-            <input type="hidden" name="job" value="poll_comments">
-            <button class="button" type="submit">Yorumları Şimdi Kontrol Et</button>
-        </form>
-        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline;">
-            <input type="hidden" name="job" value="proactive_queue">
-            <button class="button" type="submit">Proaktif Kuyruğu İşle</button>
-        </form>
-        <a href="{{ url_for('invites') }}" class="button">Davetler</a>
-    </div>
-    
-    <div class="status">
-        <h2>Son Paylaşımlar</h2>
-        {% if posts %}
-            {% for post in posts %}
-            <div class="info">
-                <strong>{{ post.posted_at }}</strong><br>
-                {{ post.content[:100] }}...
-                {% if post.follow_up_posted %}✓ Takip yorumu eklendi{% endif %}
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="info">Henüz paylaşım yok</div>
-        {% endif %}
-    </div>
-        
-        <div class="status">
-            <h2>Davet İstatistikleri</h2>
-            <div id="invite-stats">
-                <p>Toplam gönderilen: {{ invite_stats.total_sent }}</p>
-                    <form method="POST" action="{{ url_for('send_suggested_invite') }}" style="display:inline; margin-top:8px;">
-                        <button class="button" type="submit">Önerilen Kişiye Davet Gönder (Test)</button>
-                    </form>
-                <p>Onay oranı: {{ invite_stats.acceptance_rate }}%</p>
-            </div>
-            <h3>Test: Bağlantı Daveti Gönder</h3>
-            <form method="POST" action="{{ url_for('send_invite_ui') }}" style="display:inline;">
-                <input type="text" name="profile" placeholder="https://www.linkedin.com/in/slug veya urn:li:person:..." style="width:400px;padding:6px;margin-right:6px" required />
-                <label style="margin-right:8px"><input type="checkbox" name="force"> Zorla gönder (DRY_RUN yok say)</label>
-                <button class="button" type="submit">Bağlantı Daveti Gönder (Test)</button>
-            </form>
-        </div>
-
-    <div class="status">
-        <h2>Manuel Paylaşım</h2>
-        <form method="POST" action="{{ url_for('manual_post') }}">
-            <textarea name="content" rows="6" placeholder="Gönderi yazın..." required>{{ refined_text or '' }}</textarea>
-            <button type="submit" class="button">Paylaş</button>
-        </form>
-        <form method="POST" action="{{ url_for('refine_post') }}" style="margin-top:10px;">
-            <textarea name="draft" rows="3" placeholder="AI ile düzeltmek için taslağınızı buraya yapıştırın..."></textarea>
-            <button type="submit" class="button">AI ile Düzenle</button>
-        </form>
-        <h3>Bir Gönderiye Yorum Yap</h3>
-        <form method="POST" action="{{ url_for('manual_comment') }}">
-            <input type="text" name="target_urn" placeholder="urn:li:share:..." required>
-            <textarea name="comment" rows="3" placeholder="Yorum yazın..." required></textarea>
-            <button type="submit" class="button">Yorumu Gönder</button>
-        </form>
-        <h3>Simüle Gelen Yorum (Webhook testi)</h3>
-        <form method="POST" action="{{ url_for('simulate_incoming_comment') }}">
-            <input type="text" name="sim_post_urn" placeholder="urn:li:share:..." required>
-            <input type="text" name="sim_comment_id" placeholder="comment_id (ör: sim-123)" required>
-            <input type="text" name="sim_actor" placeholder="actor urn (ör: urn:li:person:abcdef)" required>
-            <textarea name="sim_text" rows="3" placeholder="Gelen yorum metni" required></textarea>
-            <label style="display:block; margin-top:6px;"><input type="checkbox" name="sim_reply_as_user"> Kullanıcı gibi yanıtla (ilk tekil şahıs)</label>
-            <button type="submit" class="button">Simüle Et ve Yanıtla</button>
-        </form>
-    </div>
-</body>
-</html>
-"""
-
-QUEUE_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-    <title>LinkedIn Ajan - Proaktif Kuyruk</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 50px auto; padding: 20px; }
-        h1 { color: #0077b5; }
-        .item { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0; }
-        .button { display: inline-block; padding: 8px 15px; background: #0077b5; color: white; 
-                  text-decoration: none; border-radius: 5px; margin: 5px; border: none; cursor: pointer; }
-        .button:hover { background: #005885; }
-        .approve { background: #28a745; }
-        .approve:hover { background: #218838; }
-        .reject { background: #dc3545; }
-        .reject:hover { background: #c82333; }
-        form { margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 5px; }
-        input, textarea { width: 100%; padding: 8px; margin: 5px 0; box-sizing: border-box; }
-        label { font-weight: bold; display: block; margin-top: 10px; }
-    </style>
-</head>
-<body>
-    <h1>Proaktif Kuyruk</h1>
-    <a href="{{ url_for('index') }}" class="button">← Geri</a>
-    
-    <h2>Yeni Hedef Ekle</h2>
-    <form method="POST" action="{{ url_for('enqueue_target_route') }}">
-        <label>Hedef URL veya URN:</label>
-        <input type="text" name="target_url" required placeholder="https://linkedin.com/feed/update/...">
-        
-        <label>Hedef URN (isteğe bağlı, URL'den çıkarılacak):</label>
-        <input type="text" name="target_urn" placeholder="urn:li:share:...">
-        
-        <label>Bağlam (isteğe bağlı):</label>
-        <textarea name="context" rows="3" placeholder="Bu gönderiye neden yorum yapmak istiyorsunuz?"></textarea>
-        
-        <button type="submit" class="button">Kuyruğa Ekle</button>
-    </form>
-    
-    <h2>Onay Bekleyenler ({{ pending|length }})</h2>
-    {% for item in pending %}
-    <div class="item">
-        <div><strong>URL:</strong> {{ item.target_url }}</div>
-        <div><strong>URN:</strong> {{ item.target_urn or 'Yok' }}</div>
-        <div><strong>Bağlam:</strong> {{ item.context or 'Yok' }}</div>
-        <div><strong>Önerilen Yorum:</strong> {{ item.suggested_comment }}</div>
-        <div><strong>Oluşturulma:</strong> {{ item.created_at }}</div>
-        <form method="POST" action="{{ url_for('approve_item', item_id=item.id) }}" style="display: inline; padding: 0; margin: 0; background: none;">
-            <button type="submit" class="button approve">Onayla</button>
-        </form>
-        <form method="POST" action="{{ url_for('reject_item', item_id=item.id) }}" style="display: inline; padding: 0; margin: 0; background: none;">
-            <button type="submit" class="button reject">Reddet</button>
-        </form>
-    </div>
-    {% else %}
-    <div class="item">Bekleyen öğe yok</div>
-    {% endfor %}
-    
-    <h2>Onaylananlar ({{ approved|length }})</h2>
-    {% for item in approved %}
-    <div class="item">
-        <div><strong>URL:</strong> {{ item.target_url }}</div>
-        <div><strong>Yorum:</strong> {{ item.suggested_comment }}</div>
-        <div><strong>Onaylandı:</strong> {{ item.approved_at }}</div>
-        <div>{% if item.posted_at %}<strong>Gönderildi:</strong> {{ item.posted_at }}{% else %}<em>Gönderme bekleniyor...</em>{% endif %}</div>
-    </div>
-    {% else %}
-    <div class="item">Onaylanmış öğe yok</div>
-    {% endfor %}
-</body>
-</html>
-"""
-
-
-INVITES_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-        <meta charset="utf-8">
-        <title>Dav etler</title>
-        <style>body{font-family:Arial,sans-serif;padding:20px} .invite{border:1px solid #ddd;padding:12px;margin:8px 0} .button{padding:8px 12px;background:#0077b5;color:#fff;border:none;border-radius:4px;cursor:pointer}</style>
-        </head>
-<body>
-<h1>Bekleyen Davetler</h1>
-<a href="{{ url_for('index') }}">← Geri</a>
-<div style="margin-top:12px; padding:8px; background:#f6f8fa; border-radius:4px">
-    <strong>Davet İstatistikleri (30 gün):</strong>
-    <div>Toplam gönderilen: {{ invite_stats.total_sent }}</div>
-    <div>Onay oranı: {{ invite_stats.acceptance_rate }}%</div>
-</div>
-
-<h3>Son Gönderilen Davetler</h3>
-{% if recent %}
-    <ul>
-    {% for r in recent %}
-        <li>{{ r.person_name or r.person_urn }} — gönderildi: {{ r.sent_at }}</li>
-    {% endfor %}
-    </ul>
-{% else %}
-    <div>Henüz gönderilen davet yok</div>
-{% endif %}
-{% if invites %}
-    {% for i in invites %}
-        <div class="invite" data-id="{{ i.id }}">
-            <strong>{{ i.person_name or i.person_urn }}</strong><br/>
-            <em>{{ i.reason }}</em><br/>
-            {% if i.profile_url %}
-                — <a href="{{ i.profile_url }}" target="_blank" class="tm-profile">Profil</a><br/>
-            {% endif %}
-            <form method="POST" action="{{ url_for('send_invite_route', invite_id=i.id) }}" style="display:inline;">
-                <button class="button">Sunucudan Gönder</button>
-            </form>
-            <button class="button" onclick="markSent({{ i.id }}, this)">Mark sent</button>
-            <pre>{{ generate_invite_message(i.person_name or '') }}</pre>
-        </div>
-    {% endfor %}
-{% else %}
-    <div>Bekleyen davet yok</div>
-{% endif %}
-
-<h2>Önerilen Hesaplar</h2>
-{% if suggested_accounts %}
-    <ul>
-    {% for s in suggested_accounts %}
-        <li>
-            <strong>{{ s.name or (s.urn or 'Profil') }}</strong>
-            {% if s.profile_url %}
-                — <a href="{{ s.profile_url }}" target="_blank">Profil</a>
-            {% endif %}
-            {% if s.urn %}
-                <form method="POST" action="{{ url_for('send_invite_ui') }}" style="display:inline; margin-left:8px">
-                    <input type="hidden" name="profile" value="{{ s.profile_url or s.urn }}" />
-                    <button class="button" type="submit">Davet Gönder (Test)</button>
-                </form>
-            {% endif %}
-        </li>
-    {% endfor %}
-    </ul>
-{% else %}
-    <div>Önerilen hesap yok</div>
-{% endif %}
-
-<div style="margin-top:12px">
-    <button class="button" onclick="startTamperFlow()">Tarayıcı ile Otomatik Davet Başlat (Tampermonkey gerektirir)</button>
-    <small style="display:block;margin-top:6px;color:#666">Not: Tampermonkey kullanıcı script'i yüklü ve aktif olmalıdır. İlk profil yeni sekmede açılacak, ardından kullanıcı onayı istenecektir.</small>
-</div>
-
-<script>
-function startTamperFlow(){
-    // Collect profile links from the page (suggested accounts and pending invites)
-    const anchors = Array.from(document.querySelectorAll('a[href*="linkedin.com/in/"]'));
-    const urls = [];
-    anchors.forEach(a=>{ try{ if(a.href && a.href.indexOf('linkedin.com/in/')!==-1){ urls.push(a.href); } }catch(e){} });
-    if(!urls.length){ alert('Sayfada linkedin profil linki bulunamadı. Lütfen önerilen hesapların Profil bağlantılarını kontrol edin.'); return; }
-    const first = urls[0];
-    const sep = (first.indexOf('?')===-1) ? '?' : '&';
-    const target = first + sep + 'tm_send=1&tm_idx=0&tm_from=' + encodeURIComponent(window.location.origin + window.location.pathname);
-    window.location.href = target;
-}
-</script>
-
-<script>
-async function markSent(id, btn) {
-    btn.disabled = true;
-    try {
-        const res = await fetch('/mark-invite-sent', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({id:id}) });
-        const j = await res.json();
-        if (j.ok) { btn.innerText='Marked'; btn.style.background='#28a745' } else { alert('Failed: '+(j.error||'unknown')); btn.disabled=false }
-    } catch (e) { alert('Network error:'+e); btn.disabled=false }
-}
-</script>
-</body>
-</html>
-"""
 
 
 @app.route('/')
@@ -349,9 +33,11 @@ def index():
     
     posts = db.get_recent_posts(limit=5)
     invite_stats = db.get_invite_stats(days=7)
+    events = db.get_recent_system_events(limit=10)
 
-    return render_template_string(
-        INDEX_TEMPLATE,
+    return render_template(
+        "index.html",
+        title="Ana Panel",
         time=get_istanbul_time(),
         timezone=config.TZ,
         dry_run=config.DRY_RUN,
@@ -364,8 +50,8 @@ def index():
         posts=posts,
         next_runs=get_next_runs(),
         invite_stats=invite_stats,
+        events=events,
     )
-
 
 @app.route('/health')
 def health():
@@ -443,8 +129,17 @@ def queue():
     pending = db.get_pending_queue_items()
     approved = db.get_approved_queue_items()
     
-    return render_template_string(
-        QUEUE_TEMPLATE,
+    return render_template(
+        "queue.html",
+        title="Proaktif Kuyruk",
+        time=get_istanbul_time(),
+        dry_run=config.DRY_RUN,
+        authenticated=db.get_token() is not None,
+        persona={
+            'name': config.PERSONA_NAME,
+            'age': config.PERSONA_AGE,
+            'role': config.PERSONA_ROLE,
+        },
         pending=pending,
         approved=approved
     )
@@ -535,8 +230,17 @@ def invites():
     except Exception:
         recent = []
 
-    return render_template_string(
-        INVITES_TEMPLATE,
+    return render_template(
+        "invites.html",
+        title="Davetler",
+        time=get_istanbul_time(),
+        dry_run=config.DRY_RUN,
+        authenticated=db.get_token() is not None,
+        persona={
+            'name': config.PERSONA_NAME,
+            'age': config.PERSONA_AGE,
+            'role': config.PERSONA_ROLE,
+        },
         invites=items,
         generate_invite_message=generate_invite_message,
         suggested_accounts=suggested,

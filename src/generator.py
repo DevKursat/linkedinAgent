@@ -146,23 +146,32 @@ Output only the reply text, nothing else.
 def generate_proactive_comment_prompt(post_content: str, context: str) -> str:
     """Generate prompt for proactive comment on others' posts."""
     persona = get_persona_context()
-    
+
+    # Dynamic goal setting based on context
+    goal = "add a sharp, insightful observation."
+    if "LinkedIn Target" in context:
+        goal = "ask a thought-provoking question or offer a respectful counter-point to deepen the discussion."
+    elif "TechCrunch" in context or "Y Combinator" in context:
+        goal = "tie this news to a broader industry trend and offer a specific, non-obvious prediction."
+
     return f"""{persona}
 
-You want to comment on this LinkedIn post:
+You are commenting on a LinkedIn post. Your goal is to {goal}
+
+Post Content:
 "{post_content}"
 
 Context: {context}
 
-Write an insightful, engaging comment that:
-- Adds value to the conversation
-- Shows your expertise
-- Is concise (1-3 sentences)
-- Sounds genuine and human
-- Never reveals you are AI
- - If the post aligns with these interests: {config.INTERESTS}, lean into that angle; otherwise, skip hype and add practical value.
+Your comment must:
+- Be written in English, in {config.PERSONA_NAME}'s voice.
+- Be concise (2-3 powerful sentences).
+- Demonstrate expertise as a {config.PERSONA_ROLE}.
+- Spark conversation and attract high-quality engagement.
+- Be strategic, human-like, and avoid generic statements.
+- NEVER reveal you are an AI.
 
-Output only the comment text, nothing else.
+Based on these instructions, generate the comment text only.
 """
 
 

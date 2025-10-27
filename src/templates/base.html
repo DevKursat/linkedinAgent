@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Agent | {{ title }}</title>
+    <style>
+        :root {
+            --primary-color: #0A66C2;
+            --secondary-color: #004182;
+            --background-color: #f3f2ef;
+            --card-background: #ffffff;
+            --text-color: #333;
+            --muted-text-color: #666;
+            --border-color: #ddd;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        body {
+            font-family: var(--font-family);
+            background-color: var(--background-color);
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+        }
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 240px;
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar h1 {
+            color: white;
+            font-size: 24px;
+            margin: 0 0 10px;
+        }
+        .sidebar .persona {
+            font-size: 14px;
+            margin-bottom: 30px;
+            opacity: 0.8;
+        }
+        .sidebar nav a {
+            display: block;
+            color: white;
+            text-decoration: none;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .sidebar nav a:hover, .sidebar nav a.active {
+            background-color: var(--secondary-color);
+        }
+        .sidebar .footer {
+            margin-top: auto;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 30px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .card {
+            background: var(--card-background);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card h3 {
+            margin-top: 0;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 18px;
+            background: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            margin: 5px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        .button:hover { background: var(--secondary-color); }
+        .button.secondary { background-color: #e0e0e0; color: #333; }
+        .button.secondary:hover { background-color: #d0d0d0; }
+        .button.danger { background-color: var(--error-color); }
+        .button.danger:hover { background-color: #c82333; }
+        .status-indicator {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-indicator.live { background-color: #e4f7e4; color: #207720; }
+        .status-indicator.dry-run { background-color: #fff4e5; color: #b45309; }
+        .status-indicator.error { background-color: #fde2e2; color: var(--error-color); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: var(--font-family);
+        }
+        .flash-message {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .flash-message.success { background-color: #e4f7e4; color: #207720; border: 1px solid #a7d9a7; }
+        .flash-message.error { background-color: #fde2e2; color: var(--error-color); border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h1>LinkedIn Agent</h1>
+            {% if persona %}
+            <div class="persona">{{ persona.name }}, {{ persona.age }}<br>{{ persona.role }}</div>
+            {% endif %}
+            <nav>
+                <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">Ana Panel</a>
+                <a href="{{ url_for('queue') }}" class="{{ 'active' if request.endpoint == 'queue' else '' }}">Proaktif Kuyruk</a>
+                <a href="{{ url_for('invites') }}" class="{{ 'active' if request.endpoint == 'invites' else '' }}">Davetler</a>
+                <!-- <a href="#">Ayarlar</a> -->
+            </nav>
+            <div class="footer">
+                {% if authenticated %}
+                    <a href="{{ url_for('logout') }}" class="button danger" style="width: 100%; text-align: center;">Çıkış Yap</a>
+                {% else %}
+                    <a href="{{ url_for('login') }}" class="button" style="width: 100%; text-align: center;">LinkedIn ile Giriş Yap</a>
+                {% endif %}
+                <p style="text-align: center; margin-top: 10px;">v1.0.0</p>
+            </div>
+        </aside>
+        <main class="main-content">
+            <div class="header">
+                <h2>{{ title }}</h2>
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    {% if dry_run %}
+                        <span class="status-indicator dry-run">Test Modu Aktif</span>
+                    {% else %}
+                        <span class="status-indicator live">Canlı Mod Aktif</span>
+                    {% endif %}
+                    <span class="status-indicator" style="background-color: #e6f0ff; color: var(--primary-color);">{{ time.strftime('%H:%M:%S') }}</span>
+                </div>
+            </div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash-message {{ category }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

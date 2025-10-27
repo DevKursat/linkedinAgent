@@ -48,23 +48,25 @@ class Config:
 
     # Personalization & interests
     INTERESTS: str = os.getenv("INTERESTS", "ai,llm,product,saas,startup,founder,ux,devtools,infra")
+    LINKEDIN_TARGET_PROFILES: str = os.getenv("LINKEDIN_TARGET_PROFILES", "")
+    CUSTOM_RSS_FEEDS: str = os.getenv("CUSTOM_RSS_FEEDS", "")
     ABOUT_ME_PATH: str = os.getenv("ABOUT_ME_PATH", "./data/about_me.md")
     POST_STYLE_FILE: str = os.getenv("POST_STYLE_FILE", "./data/style.md")
     COMMENT_STYLE_FILE: str = os.getenv("COMMENT_STYLE_FILE", "./data/style_comment.md")
     AB_TESTING: bool = os.getenv("AB_TESTING", "true").lower() == "true"
     MAX_POST_LENGTH: int = int(os.getenv("MAX_POST_LENGTH", "1200"))
 
-    # Invites (disabled by default for safety)
-    INVITES_ENABLED: bool = os.getenv("INVITES_ENABLED", "false").lower() == "true"
-    # Desired daily invites (user requested ~20)
-    INVITES_MAX_PER_DAY: int = int(os.getenv("INVITES_MAX_PER_DAY", "20"))
+    # Invites (enabled by default as per user request)
+    INVITES_ENABLED: bool = os.getenv("INVITES_ENABLED", "true").lower() == "true"
+    # Desired daily invites (~200 weekly -> 40 daily)
+    INVITES_MAX_PER_DAY: int = int(os.getenv("INVITES_MAX_PER_DAY", "40"))
     # How many invites at most to process in a single batch
-    INVITES_BATCH_SIZE: int = int(os.getenv("INVITES_BATCH_SIZE", "3"))
+    INVITES_BATCH_SIZE: int = int(os.getenv("INVITES_BATCH_SIZE", "4"))
     # Invite scheduling (controls / soft caps)
     # Default per-hour cap (scheduler will compute per-hour quota to average daily target)
-    INVITES_PER_HOUR: int = int(os.getenv("INVITES_PER_HOUR", "3"))
-    INVITES_HOUR_START: int = int(os.getenv("INVITES_HOUR_START", "7"))
-    INVITES_HOUR_END: int = int(os.getenv("INVITES_HOUR_END", "21"))
+    INVITES_PER_HOUR: int = int(os.getenv("INVITES_PER_HOUR", "4"))
+    INVITES_HOUR_START: int = int(os.getenv("INVITES_HOUR_START", "9"))
+    INVITES_HOUR_END: int = int(os.getenv("INVITES_HOUR_END", "17"))
     # Campaign duration in days (when started via manage command)
     INVITES_CAMPAIGN_DAYS: int = int(os.getenv("INVITES_CAMPAIGN_DAYS", "7"))
     # Proactive posting: when discovered items lack a LinkedIn URN, optionally post them as new shares
