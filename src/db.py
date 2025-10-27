@@ -116,16 +116,6 @@ def init_db():
     except Exception:
         pass
 
-    # System events log
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS system_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT NOT NULL,
-            details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-
     # Failed actions queue (for retrying transient failures)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS failed_actions (
@@ -399,40 +389,6 @@ def get_pending_invites() -> List[Dict[str, Any]]:
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
-
-
-def log_system_event(event_type: str, details: str = ""):
-    """Log a system event for diagnostics and UI visibility."""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO system_events (event_type, details) VALUES (?, ?)",
-            (event_type, details)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        # Avoid crashing the app if logging fails
-        print(f"Error logging system event: {e}")
-
-
-def get_recent_system_events(limit: int = 20) -> List[Dict[str, Any]]:
-    """Get recent system events."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "SELECT * FROM system_events ORDER BY created_at DESC LIMIT ?",
-            (limit,)
-        )
-        rows = cursor.fetchall()
-        return [dict(row) for row in rows]
-    except Exception:
-        # Return empty on schema error etc.
-        return []
-    finally:
-        conn.close()
 
 
 def mark_invite_sent(invite_id: int) -> None:

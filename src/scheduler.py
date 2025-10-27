@@ -164,10 +164,8 @@ def run_daily_post():
         try:
             api.like_post(post_urn)
             print("Post liked successfully")
-            db.log_system_event("like_post_success", f"Post {post_urn} liked.")
         except Exception as like_err:
             print(f"Warning: Failed to like post {post_urn}: {like_err}")
-            db.log_system_event("like_post_failed", f"Failed to like post {post_urn}: {like_err}")
         
         # Schedule follow-up comment after 66 seconds
         def post_follow_up():
@@ -176,17 +174,9 @@ def run_daily_post():
                 api.comment_on_post(post_urn, turkish_summary)
                 db.mark_follow_up_posted(post_id)
                 print("Follow-up posted successfully!")
-                db.log_system_event("follow_up_success", f"Follow-up for {post_id} posted.")
             except Exception as e:
                 print(f"Error posting follow-up: {e}")
-                db.log_system_event("follow_up_failed", f"Error for {post_id}: {e}")
-                # Enqueue for retry
-                try:
-                    payload = f"{post_urn}|| ||{turkish_summary}" # No parent comment
-                    db.enqueue_failed_action('comment', payload, str(e))
-                except Exception as db_err:
-                    print(f"DB Error: Failed to enqueue failed follow-up action: {db_err}")
-
+        
         # Schedule the follow-up
         if scheduler:
             run_date = datetime.now() + timedelta(seconds=66)
@@ -468,15 +458,9 @@ def process_invites():
             active_campaign = None
 
         # Respect configured invite hours window
-        now = datetime.now()
-        now_hour = now.hour
-        # Skip weekends for more natural behavior
-        if now.weekday() >= 5: # Monday is 0 and Sunday is 6
-            print("Skipping invites on weekend")
-            return
-
-        start_h = getattr(config, 'INVITES_HOUR_START', 9)
-        end_h = getattr(config, 'INVITES_HOUR_END', 17)
+        now_hour = datetime.now().hour
+        start_h = getattr(config, 'INVITES_HOUR_START', 7)
+        end_h = getattr(config, 'INVITES_HOUR_END', 21)
         if not (start_h <= now_hour < end_h):
             print(f"Current hour {now_hour} outside invite window {start_h}-{end_h}")
             return
@@ -516,11 +500,8 @@ def process_invites():
                     # Mark sent in DB (even in dry run we mark to avoid duplicates when testing)
                     db.mark_invite_sent(inv['id'])
                     print(f"Invite sent/marked for {person_urn}")
-                    db.log_system_event("invite_sent_success", f"Invite to {person_urn} sent/marked.")
                 except Exception as e:
-                    err_msg = f"Failed to send invite to {person_urn}: {e}"
-                    print(err_msg)
-                    db.log_system_event("invite_sent_failed", err_msg)
+                    print(f"Failed to send invite to {person_urn}: {e}")
                     # Enqueue failed action for retry
                     try:
                         payload = f"{person_urn}||{person_name}||{msg}"

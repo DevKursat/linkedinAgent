@@ -17,14 +17,8 @@ def fetch_recent_articles(hours: int = 24) -> List[Dict[str, Any]]:
     """Fetch recent articles from all sources."""
     articles = []
     cutoff_time = datetime.now() - timedelta(hours=hours)
-
-    # Combine standard and custom RSS feeds
-    all_sources = SOURCES.copy()
-    custom_feeds = [f.strip() for f in config.CUSTOM_RSS_FEEDS.split(',') if f.strip()]
-    for i, feed_url in enumerate(custom_feeds):
-        all_sources[f"custom_{i+1}"] = feed_url
     
-    for source_name, source_url in all_sources.items():
+    for source_name, source_url in SOURCES.items():
         try:
             print(f"Fetching from {source_name}...")
             feed = feedparser.parse(source_url)
@@ -86,34 +80,5 @@ def get_top_article() -> Dict[str, Any]:
 
 
 def discover_relevant_posts(limit: int = 5) -> List[Dict[str, Any]]:
-    """
-    Discover relevant posts from RSS feeds and target LinkedIn profiles.
-    NOTE: Fetching from LinkedIn profiles is simulated due to API limitations.
-    """
-    articles = fetch_recent_articles(hours=48)
-
-    # Fetch from target LinkedIn profiles (Simulated)
-    target_profiles = [p.strip() for p in config.LINKEDIN_TARGET_PROFILES.split(',') if p.strip()]
-    if target_profiles:
-        print(f"Simulating post discovery from {len(target_profiles)} target profiles.")
-        for profile_url in target_profiles:
-            # In a real implementation, this would use an API to get recent posts.
-            # For now, we simulate finding a high-engagement post.
-            try:
-                # Extract a name from the URL for a more realistic title
-                profile_name = profile_url.strip('/').split('/')[-1]
-            except Exception:
-                profile_name = "a target profile"
-
-            articles.append({
-                'source': 'LinkedIn Target',
-                'title': f"A popular post by {profile_name} on the future of AI",
-                'link': profile_url, # The link can be the profile or a placeholder post URL
-                'summary': "This simulated post discusses how large language models are reshaping the tech industry and creating new opportunities for startups.",
-                'published': datetime.now(),
-            })
-
-    # Re-sort and limit after adding new sources
-    articles.sort(key=lambda x: x["published"] or datetime.min, reverse=True)
-
-    return articles[:limit]
+    """Return top-N recent articles filtered/scored by interests."""
+    return fetch_recent_articles(hours=48)[:limit]
