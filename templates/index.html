@@ -15,7 +15,7 @@
             <section id="status">
                 <h2>Sistem Durumu</h2>
                 <p>Durum: <span id="system-status">Aktif</span></p>
-                <p>Son Çalışma: <span id="last-run">2025-10-27 21:45:00</span></p>
+                <p>Son Çalışma: <span id="last-run">Çalışıyor...</span></p>
             </section>
             <section id="settings">
                 <h2>Ayarlar</h2>
@@ -76,13 +76,12 @@
     </div>
 
     <script>
-        // Fetch and display scheduled jobs
         async function fetchScheduledJobs() {
             try {
                 const response = await fetch('/api/scheduled-jobs');
                 const jobs = await response.json();
                 const jobsList = document.getElementById('jobs-list');
-                jobsList.innerHTML = ''; // Clear current list
+                jobsList.innerHTML = '';
 
                 if (jobs.length === 0) {
                     jobsList.innerHTML = '<li>Aktif planlanmış görev bulunmuyor.</li>';
@@ -101,7 +100,6 @@
             }
         }
 
-        // Trigger a manual action
         async function triggerAction(endpoint, skipReload = false) {
             const statusElement = document.getElementById('manual-action-status');
             statusElement.textContent = 'İşlem başlatılıyor...';
@@ -114,22 +112,20 @@
                 statusElement.textContent = result.message || 'İşlem başarıyla tetiklendi!';
                 statusElement.style.color = 'green';
 
-                // Refresh the activity feed after a short delay, unless skipped
                 if (!skipReload) {
                     setTimeout(() => location.reload(), 1500);
                 }
 
             } catch (error) {
                 console.error(`Error triggering action ${endpoint}:`, error);
-                statusElement.textContent = 'İşlem sırasında bir hata oluştu.';
+                statusElement.textContent = `İşlem sırasında bir hata oluştu: ${error.message}`;
                 statusElement.style.color = 'red';
             }
         }
 
-        // Initial fetch and periodic refresh
         document.addEventListener('DOMContentLoaded', () => {
             fetchScheduledJobs();
-            setInterval(fetchScheduledJobs, 10000); // Refresh every 10 seconds
+            setInterval(fetchScheduledJobs, 10000);
         });
     </script>
 </body>

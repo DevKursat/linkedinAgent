@@ -1,0 +1,27 @@
+{
+  "me": {
+    "status_code": 200,
+    "body": {
+      "id": "fUx334lez7",
+      "localizedFirstName": "KÜRŞAT",
+      "localizedLastName": "YILMAZ",
+      "picture": "https://media.licdn.com/dms/image/v2/D5603AQGNZuHWDglPtw/profile-displayphoto-scale_200_200/B56ZkTPs0cHkAc-/0/1756964513374?e=1762992000&v=beta&t=cerLKTKVYg90sbxhsDgsj04OOgGz4p-aNcCJMAtSn5Y"
+    }
+  },
+  "post_ugc_read_v3": {
+    "status_code": 404,
+    "body": "{\"status\":404,\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"No virtual resource found\"}"
+  },
+  "comments_v3_sample": {
+    "status_code": 426,
+    "body": "{\"status\":426,\"code\":\"NONEXISTENT_VERSION\",\"message\":\"Requested version 20240901 is not active\"}"
+  },
+  "socialActions_comments_v2": {
+    "status_code": 403,
+    "body": "{\"status\":403,\"serviceErrorCode\":100,\"code\":\"ACCESS_DENIED\",\"message\":\"Not enough permissions to access: socialActions.GET_ALL.NO_VERSION\"}"
+  },
+  "growth_invitations_v2": {
+    "status_code": 404,
+    "body": "{\"status\":404,\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"No virtual resource found\"}"
+  }
+}
