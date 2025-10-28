@@ -71,12 +71,15 @@ def log_system_health():
     """A simple worker function to log a health check message."""
     log_action("System Health Check", "Scheduler is running.")
 
+from .linkedin_client import LinkedInAuthenticationError
+
 def trigger_post_creation():
     """Full logic for creating and publishing a new post."""
     log_action("Manual Trigger", "Global post creation process initiated.")
-    client = get_linkedin_client()
-    if not client:
-        log_action("Post Creation Failed", "LinkedIn client not initialized.")
+    try:
+        client = get_linkedin_client()
+    except LinkedInAuthenticationError as e:
+        log_action("Post Creation Failed", f"Authentication Error: {e}")
         return
 
     article = find_shareable_article()
@@ -124,9 +127,10 @@ def trigger_post_creation():
 def trigger_commenting():
     """Full logic for finding a post and commenting on it."""
     log_action("Manual Trigger", "Proactive commenting process initiated.")
-    client = get_linkedin_client()
-    if not client:
-        log_action("Commenting Failed", "LinkedIn client not initialized.")
+    try:
+        client = get_linkedin_client()
+    except LinkedInAuthenticationError as e:
+        log_action("Commenting Failed", f"Authentication Error: {e}")
         return
 
     post = find_engaging_post_for_comment()
@@ -157,9 +161,10 @@ def trigger_commenting():
 def trigger_invitation():
     """Full logic for sending a connection invitation."""
     log_action("Manual Trigger", "Connection invitation process initiated.")
-    client = get_linkedin_client()
-    if not client:
-        log_action("Invitation Failed", "LinkedIn client not initialized.")
+    try:
+        client = get_linkedin_client()
+    except LinkedInAuthenticationError as e:
+        log_action("Invitation Failed", f"Authentication Error: {e}")
         return
 
     profile_data = find_profile_to_invite()
