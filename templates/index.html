@@ -43,6 +43,12 @@
                 <p id="manual-action-status"></p>
             </section>
 
+            <section id="auth-controls">
+                <h2>Kimlik Doğrulama</h2>
+                <p>Eğer 'CHALLENGE' hatası alırsanız, aşağıdaki düğmeye basıp terminaldeki adımları izleyerek oturumunuzu yenileyin.</p>
+                <button onclick="triggerAction('/api/auth/login', true)">LinkedIn Oturumunu Yenile</button>
+            </section>
+
             <section id="activity-feed">
                 <h2>Eylem Akışı</h2>
                 {% if logs %}
@@ -91,7 +97,7 @@
         }
 
         // Trigger a manual action
-        async function triggerAction(endpoint) {
+        async function triggerAction(endpoint, skipReload = false) {
             const statusElement = document.getElementById('manual-action-status');
             statusElement.textContent = 'İşlem başlatılıyor...';
             statusElement.style.color = '#1877f2';
@@ -103,8 +109,10 @@
                 statusElement.textContent = result.message || 'İşlem başarıyla tetiklendi!';
                 statusElement.style.color = 'green';
 
-                // Refresh the activity feed after a short delay
-                setTimeout(() => location.reload(), 1000);
+                // Refresh the activity feed after a short delay, unless skipped
+                if (!skipReload) {
+                    setTimeout(() => location.reload(), 1500);
+                }
 
             } catch (error) {
                 console.error(`Error triggering action ${endpoint}:`, error);

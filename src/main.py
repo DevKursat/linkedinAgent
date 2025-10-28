@@ -87,6 +87,26 @@ async def trigger_invite(background_tasks: BackgroundTasks):
     background_tasks.add_task(trigger_invitation)
     return {"message": "Invitation sending triggered successfully."}
 
+@app.post("/api/auth/login")
+async def interactive_login():
+    """
+    Triggers the interactive login script to refresh LinkedIn session cookies.
+    """
+    import subprocess
+
+    log_action("Authentication", "Interactive login process initiated by user.")
+
+    # Run the script in a non-blocking way
+    process = subprocess.Popen(
+        ['python3', 'interactive_login.py'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+
+    # We don't wait for it to finish, but we could if we wanted to stream logs.
+    # For now, we just tell the user to check the terminal.
+    return {"message": "Interactive login process started. Please check the application terminal for instructions."}
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

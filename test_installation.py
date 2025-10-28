@@ -66,7 +66,8 @@ def test_fastapi_app():
         required_api_routes = {
             '/', '/health',
             '/api/scheduled-jobs', '/api/trigger/post',
-            '/api/trigger/comment', '/api/trigger/invite'
+            '/api/trigger/comment', '/api/trigger/invite',
+            '/api/auth/login'
         }
         
         # Check for the main API routes
