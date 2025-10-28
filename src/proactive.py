@@ -12,34 +12,17 @@ import httpx
 
 def enqueue_target(target_url: str, target_urn: str, context: str = "", suggest_invite: bool = False, person_urn: str = "", person_name: str = "") -> int:
     """Enqueue a target post for proactive commenting."""
-    # Generate suggested comment
     suggested_comment = suggest_comment(target_url, context)
     
-    # Save to database
-    db.enqueue_proactive_target(target_url, target_urn, context, suggested_comment)
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO proactive_queue (target_url, target_urn, context, suggested_comment, created_at) VALUES (?, ?, ?, ?, ?)",
+        (target_url, target_urn, context, suggested_comment, __import__('datetime').datetime.now())
+    )
+    conn.commit()
+    conn.close()
 
-    # Autonomously approve good suggestions to allow fully automated posting
-    try:
-        if suggested_comment and len(suggested_comment) > 15:
-            # Mark approved immediately for autonomous operation
-            # This keeps the previous UX but enables autonomous mode
-            conn = db.get_connection()
-            cur = conn.cursor()
-            cur.execute("UPDATE proactive_queue SET status='approved', approved_at = ? WHERE target_url = ? AND suggested_comment = ?",
-                        ( __import__('datetime').datetime.now(), target_url, suggested_comment))
-            conn.commit()
-            conn.close()
-            print(f"Auto-approved proactive target: {target_url}")
-    except Exception:
-        pass
-
-    # Optionally queue an invite for the person associated with this target
-    if suggest_invite and person_urn:
-        try:
-            db.enqueue_invite(person_urn, person_name or "", reason=f"From proactive target {target_url}")
-        except Exception as e:
-            print(f"Failed to enqueue invite for {person_urn}: {e}")
-    
     print(f"Enqueued target: {target_url}")
     return 1
 
@@ -48,16 +31,7 @@ def suggest_comment(post_content: str, context: str) -> str:
     """Suggest a comment for a target post."""
     try:
         prompt = generate_proactive_comment_prompt(post_content, context)
-        suggestion = generate_text(prompt, temperature=0.7).strip()
-        if suggestion:
-            return suggestion
-        # Retry once with an explicit brevity hint if the first response was empty.
-        retry_prompt = (
-            prompt
-            + "\n\nGive a concise 2-sentence LinkedIn comment that adds value to the discussion."
-        )
-        suggestion = generate_text(retry_prompt, temperature=0.6).strip()
-        return suggestion
+        return generate_text(prompt, temperature=0.7).strip()
     except Exception as e:
         print(f"Error suggesting comment: {e}")
         return ""
@@ -75,64 +49,14 @@ def mark_posted(item_id: int):
 
 
 def discover_and_enqueue(limit: int = 3) -> int:
-    """Discover relevant posts (by interests) and enqueue with suggested comments.
-
-    For demo, we use article link/title as target_url and leave target_urn empty (user may fill/approve later).
-    """
+    """Discover relevant posts and enqueue with suggested comments."""
     count = 0
     articles = discover_relevant_posts(limit=limit)
     for a in articles:
         context = f"Relevant to interests: {config.INTERESTS}. Source: {a['source']}"
         content = f"{a['title']}\n{a['summary']}\n{a['link']}"
         try:
-            # Try to suggest a comment and also attempt to enqueue an invite when possible.
-            suggestion = suggest_comment(content, context)
-            # Attempt to resolve a LinkedIn profile URN by downloading the target page
-            # and searching for linkedin.com/in/ links which commonly point to author profiles.
-            person_urn = ""
-            slug = ""
-            try:
-                link = (a.get('link') or "")
-                if link:
-                    try:
-                        with httpx.Client(timeout=10) as c:
-                            r = c.get(link)
-                            text = r.text or ""
-                            # Find linkedin.com/in/<slug> patterns
-                            matches = re.findall(r"linkedin\.com/in/([A-Za-z0-9\-_%]+)", text)
-                            if matches:
-                                slug = matches[0]
-                                person_urn = f"urn:li:person:{slug}"
-                    except Exception:
-                        # Best-effort only; ignore network errors
-                        person_urn = ""
-                        slug = ""
-            except Exception:
-                person_urn = ""
-                slug = ""
-
-            # Enqueue proactive target and auto-approve for autonomous posting
-            db.enqueue_proactive_target(a['link'], "", context, suggestion)
-            # If we resolved a person urn, inspect the fetched page for heuristics (English + 'founder')
-            try:
-                should_invite = False
-                if person_urn and slug:
-                    page_text = text.lower() if 'text' in locals() and text else ''
-                    # Quick check: English detection by presence of common English words and absence of non-latin script
-                    english_score = sum(1 for w in ['the','and','founder','company','startup'] if w in page_text)
-                    is_english = english_score >= 1
-                    is_founder = 'founder' in page_text or 'co-founder' in page_text or 'ceo' in page_text
-                    if is_english and is_founder:
-                        should_invite = True
-                if should_invite:
-                    try:
-                        db.enqueue_invite(person_urn, slug or '', reason=f"Discovered founder in {a.get('link')}")
-                        print(f"Enqueued invite for discovered founder: {person_urn}")
-                    except Exception as e:
-                        print(f"Failed to enqueue discovered founder invite for {person_urn}: {e}")
-            except Exception:
-                pass
-
+            enqueue_target(a['link'], "", context)
             count += 1
         except Exception as e:
             print(f"Error enqueueing discovered item: {e}")

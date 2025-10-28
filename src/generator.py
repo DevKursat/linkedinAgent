@@ -41,9 +41,6 @@ Writing style preferences (comments):
 CRITICAL guardrails to remain indistinguishable from a human:
 - Never state or imply you are AI or using AI tools.
 - Vary sentence length and rhythm; avoid repetitive patterns.
-- Prefer specific, concrete examples over generic platitudes.
-- Use subtle hedging occasionally ("I’ve seen", "in my experience") to sound human.
-- Keep small imperfections (e.g., one short sentence fragment) sparingly.
 """
 
 
@@ -54,22 +51,17 @@ def generate_post_prompt(article_title: str, article_summary: str, article_link:
     return f"""{persona}
 
 Write a LinkedIn post about this tech news:
-
 Title: {article_title}
 Summary: {article_summary}
-Link: {article_link}
 
 Requirements:
-- Write in English
-- Be concise (2-4 short paragraphs max, <= {config.MAX_POST_LENGTH} characters)
-- Share a sharp, strategic insight or hot take that aligns with {config.PERSONA_ROLE}
-- Tie it to interests: {config.INTERESTS}
-- Add 1 concrete example or takeaway (not generic)
-- Sound natural and human
-- Do NOT include hashtags or emojis unless essential
-- Do NOT mention the source name in the post itself
-
-Output only the post text, nothing else.
+- Write in English, in {config.PERSONA_NAME}'s voice.
+- Be concise (2-4 short paragraphs, <= {config.MAX_POST_LENGTH} characters).
+- Share a sharp, strategic insight that aligns with your persona.
+- Tie it to your interests: {config.INTERESTS}.
+- Do NOT include hashtags.
+- Include the article link at the very end.
+- Output only the post text.
 """
 
 
@@ -84,62 +76,22 @@ def generate_turkish_summary_prompt(post_content: str, source_url: str, source_n
 You just posted this on LinkedIn:
 {post_content}
 
-Now write a follow-up comment in Turkish that:
-- Summarizes the key point in 1-2 sentences
-- Includes the source reference: {source_display}
-- Sounds natural and conversational
-
-Format:
-[Your Turkish summary in 1-2 sentences]
-
-Kaynak: {source_display}
-
-Output only the comment text, nothing else.
+Now write a follow-up comment in Turkish that summarizes the key point in 1-2 sentences and includes the source.
+Format: [Your summary]. Kaynak: {source_display}
+Output only the comment text.
 """
 
 
-def generate_reply_prompt(comment_text: str, commenter_language: str, is_negative: bool = False, reply_as_user: bool = False) -> str:
+def generate_reply_prompt(comment_text: str, commenter_language: str) -> str:
     """Generate prompt for replying to a comment."""
     persona = get_persona_context()
     
-    tone_guidance = ""
-    if is_negative:
-        tone_guidance = """
-This comment seems negative or critical. Your reply should be:
-- Confident but respectful
-- Lightly witty if appropriate
-- Focused on correcting misunderstandings
-- Professional and constructive
-"""
-    else:
-        tone_guidance = """
-This comment seems positive or neutral. Your reply should be:
-- Friendly and appreciative
-- Add value or continue the conversation
-- Be genuine and human
-"""
-    # If requested, bias the reply to sound explicitly like the persona (first-person).
-    user_guidance = ""
-    if reply_as_user:
-        user_guidance = f"\nReply AS {config.PERSONA_NAME} in the first person. Use 'I' statements, signpost personal experience briefly, and keep the voice consistent with the persona above.\n"
-
     return f"""{persona}
 
-Someone commented on your LinkedIn post:
-"{comment_text}"
-
-{tone_guidance}
-{user_guidance}
-Write a reply in {commenter_language}.
-
-Requirements:
-- Keep it concise (1-3 sentences)
-- Match the commenter's language
-- Sound natural and conversational
-- Avoid overly formal or robotic phrasing
-- Never reveal you are AI
-
-Output only the reply text, nothing else.
+Someone commented on your LinkedIn post: "{comment_text}"
+Write a concise, friendly, and insightful reply in {commenter_language}.
+Keep it 1-3 sentences. Sound natural and human.
+Output only the reply text.
 """
 
 
@@ -147,7 +99,6 @@ def generate_proactive_comment_prompt(post_content: str, context: str) -> str:
     """Generate prompt for proactive comment on others' posts."""
     persona = get_persona_context()
 
-    # Dynamic goal setting based on context
     goal = "add a sharp, insightful observation."
     if "LinkedIn Target" in context:
         goal = "ask a thought-provoking question or offer a respectful counter-point to deepen the discussion."
@@ -157,48 +108,34 @@ def generate_proactive_comment_prompt(post_content: str, context: str) -> str:
     return f"""{persona}
 
 You are commenting on a LinkedIn post. Your goal is to {goal}
-
-Post Content:
-"{post_content}"
-
+Post Content: "{post_content}"
 Context: {context}
 
 Your comment must:
-- Be written in English, in {config.PERSONA_NAME}'s voice.
+- Be in English, in {config.PERSONA_NAME}'s voice.
 - Be concise (2-3 powerful sentences).
 - Demonstrate expertise as a {config.PERSONA_ROLE}.
-- Spark conversation and attract high-quality engagement.
-- Be strategic, human-like, and avoid generic statements.
+- Spark conversation.
 - NEVER reveal you are an AI.
-
-Based on these instructions, generate the comment text only.
+- Output only the comment text.
 """
 
 
 def generate_refine_post_prompt(draft_text: str, language: str = "English") -> str:
-    """Generate a prompt to refine/improve a user's draft post in their voice."""
+    """Generate a prompt to refine/improve a user's draft post."""
     persona = get_persona_context()
     return f"""{persona}
 
-You are editing and improving a LinkedIn post draft. Keep the author's voice, improve clarity, tighten wording, and align with interests: {config.INTERESTS}.
-
-Draft:
-{draft_text}
-
-Revise the draft with these constraints:
-- Keep it concise (2-4 short paragraphs), <= {config.MAX_POST_LENGTH} characters
-- Make the opening punchy (like a headline)
-- Include 1 concrete example/takeaway
-- Remove hashtags and emojis unless essential
-- No AI mentions, no boilerplate
-- Output only the revised post text
-
-Language: {language}
+Revise this LinkedIn post draft. Keep the author's voice, improve clarity, and align with interests: {config.INTERESTS}.
+Draft: "{draft_text}"
+Constraints: Concise (<= {config.MAX_POST_LENGTH} chars), punchy opening, no boilerplate.
+Language: {language}.
+Output only the revised post text.
 """
 
 
 def generate_invite_message(person_name: str = "") -> str:
-    """Generate a short, personalized invite message to send with a connection request."""
+    """Generate a short, personalized invite message."""
     persona = get_persona_context()
     name_part = f"{person_name}, " if person_name else ""
-    return f"{persona}\n\nWrite a concise (1-2 sentence) LinkedIn connection message to {name_part}that explains why you'd like to connect and gives a reason relevant to {config.PERSONA_ROLE} and interests: {config.INTERESTS}. Keep it friendly, professional, and in first-person. Output only the message text." 
+    return f"{persona}\n\nWrite a concise (1-2 sentence) LinkedIn connection message to {name_part}that explains why you'd like to connect, relevant to your role and interests: {config.INTERESTS}. Be friendly and professional. Output only the message text."

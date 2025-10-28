@@ -29,21 +29,6 @@
     </div>
 
     <div class="card" style="grid-column: 1 / -1;">
-        <h3>Son Paylaşımlar</h3>
-        {% if posts %}
-            {% for post in posts %}
-            <div style="border-bottom: 1px solid var(--border-color); padding: 10px 0;">
-                <strong>{{ post.posted_at }}</strong>
-                <p style="margin: 5px 0;">{{ post.content[:200] }}...</p>
-                {% if post.follow_up_posted %}<span style="color: var(--success-color); font-size: 12px;">✓ Türkçe özet eklendi</span>{% endif %}
-            </div>
-            {% endfor %}
-        {% else %}
-            <p>Henüz paylaşım yok.</p>
-        {% endif %}
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
         <h3>Son Sistem Olayları</h3>
         {% if events %}
             {% for event in events %}
