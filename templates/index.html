@@ -25,6 +25,24 @@
                     <button type="submit">Kaydet</button>
                 </form>
             </section>
+
+            <section id="scheduled-jobs">
+                <h2>Planlanmış Görevler</h2>
+                <ul id="jobs-list">
+                    <li>Yükleniyor...</li>
+                </ul>
+            </section>
+
+            <section id="manual-controls">
+                <h2>Manuel Kontrol Paneli</h2>
+                <div class="controls-container">
+                    <button onclick="triggerAction('/api/trigger/post')">Anlık Paylaşım Yap</button>
+                    <button onclick="triggerAction('/api/trigger/comment')">Anlık Yorum Yap</button>
+                    <button onclick="triggerAction('/api/trigger/invite')">Anlık Davet Gönder</button>
+                </div>
+                <p id="manual-action-status"></p>
+            </section>
+
             <section id="activity-feed">
                 <h2>Eylem Akışı</h2>
                 {% if logs %}
@@ -41,5 +59,61 @@
             </section>
         </main>
     </div>
+
+    <script>
+        // Fetch and display scheduled jobs
+        async function fetchScheduledJobs() {
+            try {
+                const response = await fetch('/api/scheduled-jobs');
+                const jobs = await response.json();
+                const jobsList = document.getElementById('jobs-list');
+                jobsList.innerHTML = ''; // Clear current list
+
+                if (jobs.length === 0) {
+                    jobsList.innerHTML = '<li>Aktif planlanmış görev bulunmuyor.</li>';
+                    return;
+                }
+
+                jobs.forEach(job => {
+                    const listItem = document.createElement('li');
+                    const nextRun = new Date(job.next_run_time).toLocaleString('tr-TR');
+                    listItem.textContent = `Görev: ${job.id} - Sonraki Çalışma: ${nextRun}`;
+                    jobsList.appendChild(listItem);
+                });
+            } catch (error) {
+                console.error('Error fetching scheduled jobs:', error);
+                document.getElementById('jobs-list').innerHTML = '<li>Görevler yüklenirken bir hata oluştu.</li>';
+            }
+        }
+
+        // Trigger a manual action
+        async function triggerAction(endpoint) {
+            const statusElement = document.getElementById('manual-action-status');
+            statusElement.textContent = 'İşlem başlatılıyor...';
+            statusElement.style.color = '#1877f2';
+
+            try {
+                const response = await fetch(endpoint, { method: 'POST' });
+                const result = await response.json();
+
+                statusElement.textContent = result.message || 'İşlem başarıyla tetiklendi!';
+                statusElement.style.color = 'green';
+
+                // Refresh the activity feed after a short delay
+                setTimeout(() => location.reload(), 1000);
+
+            } catch (error) {
+                console.error(`Error triggering action ${endpoint}:`, error);
+                statusElement.textContent = 'İşlem sırasında bir hata oluştu.';
+                statusElement.style.color = 'red';
+            }
+        }
+
+        // Initial fetch and periodic refresh
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchScheduledJobs();
+            setInterval(fetchScheduledJobs, 10000); // Refresh every 10 seconds
+        });
+    </script>
 </body>
 </html>
