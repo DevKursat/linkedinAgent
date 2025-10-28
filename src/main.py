@@ -34,11 +34,22 @@ async def startup_event():
 async def shutdown_event():
     shutdown_scheduler()
 
+import os
+from starlette.staticfiles import StaticFiles
+
+# Determine the absolute path to the project root's "static" and "templates" directory
+# This makes the app runnable from any directory
+current_file_path = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_file_path, '..'))
+static_dir = os.path.join(project_root, 'static')
+templates_dir = os.path.join(project_root, 'templates')
+
+
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Setup templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=templates_dir)
 
 from sqlalchemy.orm import Session
 from fastapi import Depends
