@@ -1,138 +1,68 @@
-"""Utility functions for LinkedIn Agent."""
-import pytz
+"""Utility functions for the LinkedIn agent."""
 import random
-from datetime import datetime, time
-from typing import Tuple, Optional
-from langdetect import detect, LangDetectException
-from .config import config
+from datetime import datetime, time, timedelta
+from urllib.parse import urlparse, parse_qs
+import pytz
 
+def get_istanbul_time():
+    """Get the current time in Istanbul."""
+    return datetime.now(pytz.timezone('Europe/Istanbul'))
 
-def get_istanbul_time() -> datetime:
-    """Get current time in Istanbul timezone."""
-    tz = pytz.timezone(config.TZ)
-    return datetime.now(tz)
-
-
-def parse_time_window(window_str: str) -> Tuple[time, time]:
-    """Parse time window string like '09:30-11:00' to time objects."""
-    start_str, end_str = window_str.split("-")
-    start_hour, start_min = map(int, start_str.split(":"))
-    end_hour, end_min = map(int, end_str.split(":"))
+def get_random_post_time():
+    """Get a random time between 9 AM and 10 AM Istanbul time."""
+    istanbul_tz = pytz.timezone('Europe/Istanbul')
+    now = datetime.now(istanbul_tz)
     
-    return time(start_hour, start_min), time(end_hour, end_min)
-
-
-def is_in_peak_window() -> bool:
-    """Check if current time is in peak posting window."""
-    now = get_istanbul_time()
-    current_time = now.time()
+    # Define the target time window in the local timezone of the server
+    # Then convert to Istanbul time if needed, but it's easier to work directly in the target timezone
+    start_time = time(9, 0, 0)
+    end_time = time(10, 0, 0)
     
-    # Parse windows from config
-    windows = config.POST_WINDOWS.split(",")
+    # Calculate a random minute and second within the hour
+    random_minute = random.randint(start_time.minute, end_time.minute -1) # -1 to ensure it's before 10:00
+    random_second = random.randint(0, 59)
     
-    for window in windows:
-        window = window.strip()
-        if ":" not in window:
-            continue
+    post_time = now.replace(hour=start_time.hour, minute=random_minute, second=random_second, microsecond=0)
+    
+    # If the calculated post time is in the past for today, schedule it for tomorrow
+    if post_time < now:
+        post_time += timedelta(days=1)
         
-        # Check if weekday restriction
-        if window.startswith("weekday:"):
-            if now.weekday() >= 5:  # Saturday=5, Sunday=6
-                continue
-            window = window.replace("weekday:", "")
-        
-        try:
-            start_time, end_time = parse_time_window(window)
-            if start_time <= current_time <= end_time:
-                return True
-        except Exception:
-            continue
-    
-    return False
+    return post_time.time()
 
+def get_reply_delay_seconds():
+    """Get a random delay in seconds for replies to simulate human behavior."""
+    return random.randint(120, 300) # 2 to 5 minutes
 
-def get_random_post_time() -> datetime:
-    """Get a random time within posting windows today."""
-    now = get_istanbul_time()
-    windows = config.POST_WINDOWS.split(",")
-    
-    valid_windows = []
-    for window in windows:
-        window = window.strip()
-        if ":" not in window:
-            continue
-        
-        # Check weekday restriction
-        if window.startswith("weekday:"):
-            if now.weekday() >= 5:
-                continue
-            window = window.replace("weekday:", "")
-        
-        try:
-            start_time, end_time = parse_time_window(window)
-            valid_windows.append((start_time, end_time))
-        except Exception:
-            continue
-    
-    if not valid_windows:
-        # Default to 10 AM if no valid windows
-        return now.replace(hour=10, minute=0, second=0, microsecond=0)
-    
-    # Pick random window
-    start_time, end_time = random.choice(valid_windows)
-    
-    # Random time within window
-    start_minutes = start_time.hour * 60 + start_time.minute
-    end_minutes = end_time.hour * 60 + end_time.minute
-    random_minutes = random.randint(start_minutes, end_minutes)
-    
-    hour = random_minutes // 60
-    minute = random_minutes % 60
-    
-    return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-
-def get_reply_delay_seconds() -> int:
-    """Get random delay for replying to comments (5-30 minutes, faster in peak)."""
-    if is_in_peak_window():
-        # Faster replies during peak: 5-15 minutes
-        return random.randint(5 * 60, 15 * 60)
-    else:
-        # Slower replies off-peak: 15-30 minutes
-        return random.randint(15 * 60, 30 * 60)
-
-
-def detect_language(text: str) -> str:
-    """Detect language of text."""
+def get_clean_url(url: str) -> str:
+    """Remove tracking parameters from a URL."""
+    if not url:
+        return ""
     try:
-        lang = detect(text)
-        return lang
-    except LangDetectException:
-        return "en"  # Default to English
+        parsed_url = urlparse(url)
+        # Reconstruct the URL without the query string or fragment
+        clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
+        # Some URLs might have the core content identifier in the query string
+        # e.g., YouTube. For LinkedIn articles, cleaning is usually safe.
+        # Let's check for a common LinkedIn article tracker
+        if 'feedView=' in parsed_url.query:
+            return clean_url
 
+        # A more robust version could selectively keep certain query params
+        # For now, we strip all for simplicity
+        return clean_url
+    except Exception:
+        # If parsing fails, return the original URL
+        return url
 
-def is_negative_sentiment(text: str) -> bool:
-    """Simple heuristic to detect negative sentiment."""
-    negative_indicators = [
-        "wrong", "bad", "terrible", "awful", "disagree", "hate", 
-        "stupid", "nonsense", "ridiculous", "false", "misleading",
-        "yanlış", "kötü", "berbat", "katılmıyorum", "saçma",
-    ]
+def format_source_name(source_name: str) -> str:
+    """Format the source name for display in posts."""
+    if not source_name:
+        return "the original source"
     
-    text_lower = text.lower()
-    for indicator in negative_indicators:
-        if indicator in text_lower:
-            return True
-    
-    return False
+    # Example: "A16Z" -> "a16z"
+    if source_name.isupper():
+        return source_name.lower()
 
-
-def format_source_name(source_key: str) -> str:
-    """Format source key to display name."""
-    mapping = {
-        "techcrunch": "TechCrunch",
-        "ycombinator": "Y Combinator",
-        "indiehackers": "Indie Hackers",
-        "producthunt": "Product Hunt",
-    }
-    return mapping.get(source_key, source_key.title())
+    # Example: "Stratechery" -> "Stratechery" (no change)
+    return source_name

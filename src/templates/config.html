@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% block title %}Configuration{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4 text-gray-800">Agent Configuration</h1>
+
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Current Settings</h6>
+    </div>
+    <div class="card-body">
+        <p>This page shows the current operational parameters of the agent. These values are loaded from your <code>.env</code> file or environment variables when the application starts.</p>
+        <div class="table-responsive">
+            <table class="table table-bordered" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Parameter</th>
+                        <th>Value</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for key, value in config.items() %}
+                    <tr>
+                        <td><code>{{ key }}</code></td>
+                        <td>
+                            {% if value is boolean %}
+                                <span class="badge badge-{{ 'success' if value else 'secondary' }}">{{ value }}</span>
+                            {% elif not value %}
+                                <span class="badge badge-light">Not Set</span>
+                            {% else %}
+                                <pre>{{ value }}</pre>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if key == 'DRY_RUN' %}
+                                If true, the agent will not perform any actions that modify external state (posting, commenting, etc.).
+                            {% elif key == 'INVITES_ENABLED' %}
+                                Master switch for the connection invitation feature.
+                            {% elif key == 'PROACTIVE_ENABLED' %}
+                                Master switch for the proactive commenting feature.
+                            {% elif key == 'MODERATION_LEVEL' %}
+                                Controls content approval. Can be 'none', 'self_moderate', or 'human_in_the_loop'.
+                            {% elif key == 'INTERESTS' %}
+                                Comma-separated list of keywords used for tagging posts.
+                            {% elif key == 'LINKEDIN_TARGET_PROFILES' %}
+                                Comma-separated list of LinkedIn profile URLs for proactive engagement.
+                            {% elif key == 'CUSTOM_RSS_FEEDS' %}
+                                Comma-separated list of custom RSS feeds to source content from. Format: Name|URL,Name2|URL2
+                            {% elif key == 'TZ' %}
+                                The timezone the scheduler operates in.
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

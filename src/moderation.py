@@ -1,83 +1,42 @@
-"""Content moderation and filtering."""
-from typing import Tuple
-import re
+"""Content moderation and approval logic."""
 from .config import config
+from . import db
+from .gemini import generate_text
+from .generator import generate_moderation_prompt
 
 
-# Political keywords to block
-POLITICS_KEYWORDS = [
-    "election", "vote", "voting", "democrat", "republican", "liberal", "conservative",
-    "trump", "biden", "congress", "senate", "parliament", "政治", "选举", "投票",
-    "政党", "seçim", "oy", "parti", "siyaset", "政策", "法案", "议会",
-]
+def should_post_content(content: str) -> (bool, str):
+    """
+    Check if the content should be posted based on moderation rules.
+    Returns a tuple of (should_post, reason).
+    """
+    moderation_level = (config.MODERATION_LEVEL or 'none').lower()
 
-# Speculative crypto keywords to block
-CRYPTO_KEYWORDS = [
-    "bitcoin", "btc", "ethereum", "eth", "crypto", "cryptocurrency", "blockchain",
-    "nft", "defi", "web3", "metaverse", "token", "coin", "mining", "wallet",
-    "altcoin", "dogecoin", "shiba", "pump", "moon", "hodl", "加密货币", 
-    "比特币", "以太坊", "kripto", "blokzincir",
-]
+    if moderation_level == 'none':
+        return True, "No moderation required."
 
-# Sensitive topics that require approval
-SENSITIVE_KEYWORDS = [
-    "war", "military", "weapon", "terrorism", "racist", "sexist",
-    "religion", "religious", "islam", "christian", "jewish", "hindu", "buddhist",
-    "holy war", "sectarian",  # keep explicit religious conflict terms
-    "savaş", "silah", "terör", "din", "dini", "战争", "武器", "宗教",
-]
+    if moderation_level == 'self_moderate':
+        try:
+            prompt = generate_moderation_prompt(content)
+            decision = generate_text(prompt, temperature=0.1).strip().lower()
 
+            if decision.startswith('yes'):
+                return True, "Content self-approved by AI."
+            else:
+                # Log this for review
+                db.log_system_event("self_moderation_rejected", f"Content: {content[:100]}...")
+                return False, "Content rejected by AI self-moderation."
+        except Exception as e:
+            print(f"Error during self-moderation: {e}")
+            # Fail safe: if moderation fails, block the post.
+            db.log_system_event("self_moderation_failed", f"Error: {e}")
+            return False, "Self-moderation process failed."
 
-def _contains_keyword(text_lower: str, keyword: str) -> bool:
-    """Return True if keyword appears as a standalone token (case-folded)."""
-    # For Asian characters or keywords containing non-word chars, simple containment is fine
-    if any(ord(ch) > 127 for ch in keyword) or not keyword.isalnum():
-        return keyword in text_lower
-    pattern = r"\b" + re.escape(keyword) + r"\b"
-    return re.search(pattern, text_lower) is not None
+    if moderation_level == 'human_in_the_loop':
+        # In this mode, all generated content is saved for manual approval.
+        # The scheduler does not post directly. Another process would read approved content.
+        # For this application, we can simulate this by logging and blocking.
+        db.add_pending_post(content, "Awaiting human approval.")
+        return False, "Content pending human approval."
 
-
-def is_blocked(text: str) -> Tuple[bool, str]:
-    """Check if content should be blocked."""
-    text_lower = text.lower()
-    
-    # Check politics
-    if config.BLOCK_POLITICS:
-        for keyword in POLITICS_KEYWORDS:
-            if _contains_keyword(text_lower, keyword):
-                return True, f"blocked: political content ({keyword})"
-    
-    # Check speculative crypto
-    if config.BLOCK_SPECULATIVE_CRYPTO:
-        for keyword in CRYPTO_KEYWORDS:
-            if _contains_keyword(text_lower, keyword):
-                return True, f"blocked: speculative crypto ({keyword})"
-    
-    return False, ""
-
-
-def is_sensitive(text: str) -> Tuple[bool, str]:
-    """Check if content is sensitive and requires approval."""
-    if not config.REQUIRE_APPROVAL_SENSITIVE:
-        return False, ""
-    
-    text_lower = text.lower()
-    
-    for keyword in SENSITIVE_KEYWORDS:
-        if _contains_keyword(text_lower, keyword):
-            return True, f"sensitive: {keyword}"
-    
-    return False, ""
-
-
-def should_post_content(text: str) -> Tuple[bool, str]:
-    """Check if content should be posted automatically."""
-    blocked, reason = is_blocked(text)
-    if blocked:
-        return False, reason
-    
-    sensitive, reason = is_sensitive(text)
-    if sensitive:
-        return False, reason
-    
-    return True, ""
+    return True, "Moderation level not recognized, defaulting to approve."

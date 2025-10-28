@@ -1,101 +1,70 @@
-"""RSS feed sources for tech news."""
+"""Module for fetching articles from configured sources."""
 import feedparser
-from typing import List, Dict, Any
-from datetime import datetime, timedelta
-import random
 from .config import config
+from . import db
+from .utils import get_clean_url
+from .gemini import generate_text
+from .generator import generate_summary_prompt
 
 
-SOURCES = {
-    "techcrunch": "https://techcrunch.com/feed/",
-    "ycombinator": "https://news.ycombinator.com/rss",
-    "indiehackers": "https://www.indiehackers.com/feed",
-    "producthunt": "https://www.producthunt.com/feed",
-}
+def get_all_articles():
+    """Fetch articles from all configured RSS feeds."""
+    all_entries = []
 
-
-def fetch_recent_articles(hours: int = 24) -> List[Dict[str, Any]]:
-    """Fetch recent articles from all sources."""
-    articles = []
-    cutoff_time = datetime.now() - timedelta(hours=hours)
-
-    all_sources = SOURCES.copy()
-    custom_feeds = [f.strip() for f in config.CUSTOM_RSS_FEEDS.split(',') if f.strip()]
-    for i, feed_url in enumerate(custom_feeds):
-        all_sources[f"custom_{i+1}"] = feed_url
-    
-    for source_name, source_url in all_sources.items():
-        try:
-            print(f"Fetching from {source_name}...")
-            feed = feedparser.parse(source_url)
-            
-            for entry in feed.entries[:10]:
-                published = None
-                if hasattr(entry, 'published_parsed') and entry.published_parsed:
-                    published = datetime(*entry.published_parsed[:6])
-                
-                if published and published < cutoff_time:
-                    continue
-                
-                articles.append({
-                    "source": source_name,
-                    "title": entry.get("title", ""),
-                    "link": entry.get("link", ""),
-                    "summary": entry.get("summary", ""),
-                    "published": published,
-                })
-        
-        except Exception as e:
-            print(f"Error fetching from {source_name}: {e}")
-            continue
-    
-    interests = [s.strip().lower() for s in config.INTERESTS.split(',') if s.strip()]
-    if interests:
-        def score(a):
-            text = (a.get("title","") + "\n" + a.get("summary","" )).lower()
-            return sum(1 for kw in interests if kw in text)
-        articles.sort(key=lambda x: (score(x), x["published"] or datetime.min), reverse=True)
-    else:
-        articles.sort(key=lambda x: x["published"] or datetime.min, reverse=True)
-    
-    return articles
-
-
-def get_top_article() -> Dict[str, Any]:
-    """Get the most relevant article from sources."""
-    articles = fetch_recent_articles(hours=48)
-    if articles:
-        return articles[0]
-    
-    return {
-        "source": "fallback",
-        "title": "Tech Innovation Continues",
-        "link": "https://techcrunch.com",
-        "summary": "The tech industry continues to innovate.",
-        "published": datetime.now(),
+    # Pre-defined high-quality sources
+    default_sources = {
+        'Stratechery': 'https://stratechery.com/feed/',
+        'A16Z': 'https://a16z.com/feed/',
     }
 
+    # User-defined custom sources
+    custom_sources = {}
+    try:
+        raw_custom = (config.CUSTOM_RSS_FEEDS or '').strip()
+        if raw_custom:
+            for item in raw_custom.split(','):
+                parts = item.split('|')
+                if len(parts) == 2 and parts[0].strip() and parts[1].strip().startswith(('http', 'https')):
+                    custom_sources[parts[0].strip()] = parts[1].strip()
+    except Exception as e:
+        print(f"Warning: Could not parse CUSTOM_RSS_FEEDS. Error: {e}")
 
-def discover_relevant_posts(limit: int = 5) -> List[Dict[str, Any]]:
-    """Discover relevant posts from RSS feeds and target LinkedIn profiles."""
-    articles = fetch_recent_articles(hours=48)
+    # Combine sources, with custom sources taking precedence
+    sources = {**default_sources, **custom_sources}
 
-    target_profiles = [p.strip() for p in config.LINKEDIN_TARGET_PROFILES.split(',') if p.strip()]
-    if target_profiles:
-        print(f"Simulating post discovery from {len(target_profiles)} target profiles.")
-        for profile_url in target_profiles:
-            try:
-                profile_name = profile_url.strip('/').split('/')[-1]
-            except Exception:
-                profile_name = "a target profile"
+    for name, url in sources.items():
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries:
+                all_entries.append({
+                    'title': entry.title,
+                    'link': get_clean_url(entry.link),
+                    'summary': entry.summary,
+                    'source': name
+                })
+        except Exception as e:
+            print(f"Error fetching feed for {name}: {e}")
+            db.log_system_event("rss_fetch_failed", f"Failed to fetch from {name}: {e}")
 
-            articles.append({
-                'source': 'LinkedIn Target',
-                'title': f"A popular post by {profile_name} on the future of AI",
-                'link': profile_url,
-                'summary': "This simulated post discusses how LLMs are reshaping the tech industry.",
-                'published': datetime.now(),
-            })
+    return all_entries
 
-    random.shuffle(articles)
-    return articles[:limit]
+
+def get_top_article():
+    """Select the top article and generate a summary."""
+    articles = get_all_articles()
+    if not articles:
+        raise ValueError("No articles found from any source.")
+
+    # Simple selection logic: for now, just pick the first one.
+    # Future enhancement: implement a scoring system.
+    top_article = articles[0]
+
+    try:
+        summary_prompt = generate_summary_prompt(top_article['title'], top_article['summary'])
+        generated_summary = generate_text(summary_prompt)
+        top_article['summary'] = generated_summary
+    except Exception as e:
+        print(f"Warning: Failed to generate summary for '{top_article['title']}': {e}")
+        # Proceed with the original summary if generation fails
+
+    return top_article

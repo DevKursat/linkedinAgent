@@ -9,6 +9,7 @@ langdetect==1.0.9
 feedparser==6.0.10
 rich==13.7.0
 gunicorn==21.2.0
+linkedin-api
 Werkzeug==3.0.1
 
 # Additional runtime/test helpers

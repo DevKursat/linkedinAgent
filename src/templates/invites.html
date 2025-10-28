@@ -1,52 +1,71 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
+
+{% block title %}Invitations{% endblock %}
+
 {% block content %}
-<div class="card">
-    <h3>Davet İstatistikleri (Son 30 gün)</h3>
-    <p><strong>Toplam Gönderilen:</strong> {{ invite_stats.total_sent }}</p>
-    <p><strong>Kabul Oranı:</strong> {{ invite_stats.acceptance_rate }}%</p>
+<h1 class="h3 mb-4 text-gray-800">Invitation Management</h1>
+
+<!-- Pending Invites -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Pending Invitations</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Person URN</th>
+                        <th>Name</th>
+                        <th>Added At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invite in pending %}
+                    <tr>
+                        <td>{{ invite.person_urn }}</td>
+                        <td>{{ invite.person_name }}</td>
+                        <td>{{ invite.created_at }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center">No pending invitations.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
-<div class="card">
-    <h3>Bekleyen Davetler ({{ invites|length }})</h3>
-    {% if invites %}
-        {% for i in invites %}
-            <div style="border-bottom: 1px solid var(--border-color); padding: 15px 0;">
-                <p><strong>{{ i.person_name or i.person_urn }}</strong></p>
-                <p><em>Sebep: {{ i.reason }}</em></p>
-                {% if i.profile_url %}
-                    <a href="{{ i.profile_url }}" target="_blank" class="button secondary">Profili Görüntüle</a>
-                {% endif %}
-                <form method="POST" action="{{ url_for('send_invite_route', invite_id=i.id) }}" style="display:inline;">
-                    <button class="button">Sunucudan Gönder</button>
-                </form>
-            </div>
-        {% endfor %}
-    {% else %}
-        <p>Bekleyen davet yok.</p>
-    {% endif %}
-</div>
-
-<div class="card">
-    <h3>Önerilen Hesaplar</h3>
-    {% if suggested_accounts %}
-        <ul style="list-style: none; padding: 0;">
-        {% for s in suggested_accounts %}
-            <li style="margin-bottom: 10px;">
-                <strong>{{ s.name or (s.urn or 'Profil') }}</strong>
-                {% if s.profile_url %}
-                    — <a href="{{ s.profile_url }}" target="_blank">Profil</a>
-                {% endif %}
-                {% if s.urn %}
-                    <form method="POST" action="{{ url_for('send_invite_ui') }}" style="display:inline; margin-left:8px">
-                        <input type="hidden" name="profile" value="{{ s.profile_url or s.urn }}" />
-                        <button class="button" type="submit">Davet Gönder</button>
-                    </form>
-                {% endif %}
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>Önerilen hesap bulunamadı.</p>
-    {% endif %}
+<!-- Sent Invites -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-success">Recently Sent Invitations</h6>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered" width="100%" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Person URN</th>
+                        <th>Sent At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for invite in sent %}
+                    <tr>
+                        <td>{{ invite.person_urn }}</td>
+                        <td>{{ invite.sent_at }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="2" class="text-center">No recently sent invitations.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
 {% endblock %}

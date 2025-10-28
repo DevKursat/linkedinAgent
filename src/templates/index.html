@@ -1,66 +1,149 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
 {% block content %}
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Dashboard</h1>
 
-    <div class="card">
-        <h3>Sistem Durumu</h3>
-        <p><strong>LinkedIn Girişi:</strong> {{ 'Yapıldı ✓' if authenticated else 'Yapılmadı' }}</p>
-        <p><strong>Sıradaki Görevler:</strong></p>
-        <ul>
-            <li>Günlük paylaşım: {{ next_runs.get('daily_post','-') }}</li>
-            <li>Yorum kontrolü: {{ next_runs.get('poll_comments','-') }}</li>
-            <li>Proaktif kuyruk: {{ next_runs.get('proactive_queue','-') }}</li>
-        </ul>
-    </div>
-
-    <div class="card">
-        <h3>Hızlı İşlemler</h3>
-        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline-block;">
-            <input type="hidden" name="job" value="daily_post">
-            <button class="button" type="submit">Paylaşım Yap</button>
-        </form>
-        <form method="POST" action="{{ url_for('trigger_job') }}" style="display:inline-block;">
-            <input type="hidden" name="job" value="poll_comments">
-            <button class="button" type="submit">Yorumları Kontrol Et</button>
-        </form>
-        <form method="POST" action="{{ url_for('discover') }}" style="display:inline-block;">
-            <button class="button" type="submit">Gönderi Keşfet</button>
-        </form>
-    </div>
-
-    <div class="card" style="grid-column: 1 / -1;">
-        <h3>Son Sistem Olayları</h3>
-        {% if events %}
-            {% for event in events %}
-            <div style="border-bottom: 1px solid var(--border-color); padding: 10px 0; font-size: 14px;">
-                <strong style="color: {{ 'var(--error-color)' if 'failed' in event.event_type else 'var(--text-color)' }}">{{ event.event_type }}</strong>
-                <p style="margin: 5px 0;">{{ event.details }}</p>
-                <small style="color: var(--muted-text-color);">{{ event.created_at }}</small>
+    <!-- Stat Cards -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Posts (Today)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.posts_today }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-calendar-day fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
-            {% endfor %}
-        {% else %}
-            <p>Kaydedilmiş sistem olayı yok.</p>
-        {% endif %}
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Comments (Today)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.comments_today }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-comments fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Invites Sent (Today)</div>
+                            <div class="h5 mb-0 mr-3 font-weight-bold text-gray-800">{{ stats.invites_today }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-user-plus fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Pending Invites</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.pending_invites }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-hourglass-start fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="card">
-        <h3>Manuel Paylaşım</h3>
-        <form method="POST" action="{{ url_for('manual_post') }}">
-            <div class="form-group">
-                <textarea name="content" rows="5" placeholder="Gönderi metnini buraya yazın..." required>{{ refined_text or '' }}</textarea>
+    <!-- Content Row -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <!-- Scheduler Status -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Scheduler Status</h6>
+                </div>
+                <div class="card-body">
+                    <h4 class="small font-weight-bold">Daily Post<span class="float-right">{{ next_runs.daily_post or 'Not scheduled' }}</span></h4>
+                    <h4 class="small font-weight-bold">Poll Comments<span class="float-right">{{ next_runs.poll_comments or 'Not scheduled' }}</span></h4>
+                    <h4 class="small font-weight-bold">Process Invites<span class="float-right">{{ next_runs.process_invites or 'Not scheduled' }}</span></h4>
+                    <hr>
+                    <p>Pending Background Actions: <strong>{{ pending_actions }}</strong></p>
+                    <button class="btn btn-primary btn-sm" onclick="runJob('daily_post')">Run Daily Post Now</button>
+                    <button class="btn btn-info btn-sm" onclick="runJob('poll_comments')">Run Comment Poll Now</button>
+                </div>
             </div>
-            <button type="submit" class="button">Paylaş</button>
-        </form>
-    </div>
+        </div>
 
-    <div class="card">
-        <h3>AI ile Metin Geliştir</h3>
-        <form method="POST" action="{{ url_for('refine_post') }}">
-            <div class="form-group">
-                <textarea name="draft" rows="5" placeholder="Geliştirmek istediğiniz metin taslağını buraya yapıştırın..."></textarea>
+        <div class="col-lg-6 mb-4">
+            <!-- Recent System Events -->
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Recent System Events</h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for event in events %}
+                        <a href="#" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ event.event_type.replace('_', ' ') | title }}</h6>
+                                <small>{{ event.timestamp }}</small>
+                            </div>
+                            <p class="mb-1 small text-muted">{{ event.details[:100] }}{% if event.details|length > 100 %}...{% endif %}</p>
+                        </a>
+                        {% else %}
+                        <p>No recent system events.</p>
+                        {% endfor %}
+                    </div>
+                </div>
             </div>
-            <button type="submit" class="button">Geliştir</button>
-        </form>
+        </div>
     </div>
 </div>
+
+<script>
+function runJob(jobName) {
+    if (!confirm('Are you sure you want to run ' + jobName + ' now?')) {
+        return;
+    }
+    fetch('/api/run_job', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ job_name: jobName }),
+    })
+    .then(response => response.json())
+    .then(data => {
+        alert(data.message);
+        location.reload();
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+        alert('An error occurred.');
+    });
+}
+</script>
 {% endblock %}
