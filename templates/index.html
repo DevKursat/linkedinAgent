@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedIn Agent Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LinkedIn Agent Dashboard</h1>
+        </header>
+        <main>
+            <section id="status">
+                <h2>Sistem Durumu</h2>
+                <p>Durum: <span id="system-status">Aktif</span></p>
+                <p>Son Çalışma: <span id="last-run">2025-10-27 21:45:00</span></p>
+            </section>
+            <section id="settings">
+                <h2>Ayarlar</h2>
+                <form>
+                    <label for="keywords">Takip Edilecek Anahtar Kelimeler:</label>
+                    <input type="text" id="keywords" name="keywords" value="AI, python, data science">
+                    <button type="submit">Kaydet</button>
+                </form>
+            </section>
+            <section id="activity-feed">
+                <h2>Eylem Akışı</h2>
+                {% if logs %}
+                    {% for log in logs %}
+                    <div class="log-item">
+                        <p><strong>Tür:</strong> {{ log.action_type }}</p>
+                        <p><strong>Detay:</strong> {{ log.details }}</p>
+                        <p><strong>Zaman:</strong> {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Henüz gerçekleştirilmiş bir eylem bulunmuyor.</p>
+                {% endif %}
+            </section>
+        </main>
+    </div>
+</body>
+</html>
