@@ -105,3 +105,14 @@ section {
 #manual-controls button:hover {
     background-color: #36a420;
 }
+
+.verify-link {
+    font-weight: bold;
+    color: #1877f2;
+    text-decoration: none;
+    margin-left: 8px;
+}
+
+.verify-link:hover {
+    text-decoration: underline;
+}

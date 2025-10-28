@@ -49,7 +49,11 @@
                     {% for log in logs %}
                     <div class="log-item">
                         <p><strong>Tür:</strong> {{ log.action_type }}</p>
-                        <p><strong>Detay:</strong> {{ log.details }}</p>
+                        <p><strong>Detay:</strong> {{ log.details }}
+                            {% if log.result_url %}
+                                <a href="{{ log.result_url }}" target="_blank" class="verify-link">(Sonucu Gör)</a>
+                            {% endif %}
+                        </p>
                         <p><strong>Zaman:</strong> {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
                     </div>
                     {% endfor %}

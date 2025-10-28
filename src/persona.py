@@ -6,7 +6,6 @@ def get_persona_prompt():
     This prompt will guide the LLM in all content generation tasks.
     """
 
-    # Persona attributes based on user feedback and profile analysis
     persona_details = {
         "name": "Kürşat",
         "age": 21,
@@ -45,8 +44,3 @@ def get_persona_prompt():
     """
 
     return prompt.strip()
-
-if __name__ == '__main__':
-    # To test the prompt generation
-    prompt = get_persona_prompt()
-    print(prompt)
