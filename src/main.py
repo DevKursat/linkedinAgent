@@ -88,42 +88,16 @@ async def trigger_invite(background_tasks: BackgroundTasks):
     return {"message": "Invitation sending triggered successfully."}
 
 import sys
+import logging
 
-@app.post("/api/auth/login")
-async def interactive_login():
-    """
-    Triggers the interactive login script to refresh LinkedIn session cookies.
-    This now runs the script in a way that inherits the main terminal for I/O.
-    """
-    import subprocess
+# Setup a dedicated logger for debugging this specific issue
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='auth_debug.log',
+    filemode='w'
+)
 
-    log_action("Authentication", "Interactive login process initiated by user.")
-
-    print("\n" + "="*60)
-    print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
-    print("="*60 + "\n")
-
-    # Run the script ensuring it uses the main process's terminal for input and output
-    try:
-        subprocess.run(
-            [sys.executable, 'interactive_login.py'],
-            check=True, # This will raise an exception if the script fails
-            input=sys.stdin, # Connect script's input to the main terminal's input
-        )
-        message = "Interactive login process completed successfully! Cookies saved."
-        print(f"\n✅ {message}\n")
-        return {"message": message}
-    except subprocess.CalledProcessError as e:
-        message = f"Interactive login script failed with an error: {e}"
-        print(f"\n❌ {message}\n")
-        # Return a 500 error to the frontend to indicate failure
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=message)
-    except Exception as e:
-        message = f"An unexpected error occurred: {e}"
-        print(f"\n❌ {message}\n")
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=message)
 
 @app.get("/health")
 def health_check():
