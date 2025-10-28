@@ -10,6 +10,7 @@ class ActionLog(Base):
     action_type = Column(String, index=True)
     details = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    result_url = Column(String, nullable=True) # To store the URL for verification
 
 class Post(Base):
     __tablename__ = "posts"
