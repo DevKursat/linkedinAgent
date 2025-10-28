@@ -62,18 +62,22 @@ def test_fastapi_app():
             return False
         
         # Check routes by inspecting the app's routes attribute
-        routes = [route.path for route in app.routes]
-        required_routes = ['/', '/health']
+        routes = {route.path for route in app.routes}
+        required_api_routes = {
+            '/', '/health',
+            '/api/scheduled-jobs', '/api/trigger/post',
+            '/api/trigger/comment', '/api/trigger/invite'
+        }
         
-        # Check for the main routes
-        for route in required_routes:
-            if route not in routes:
-                print(f"✗ Required route missing: {route}")
-                return False
+        # Check for the main API routes
+        if not required_api_routes.issubset(routes):
+            missing = required_api_routes - routes
+            print(f"✗ Required API routes missing: {missing}")
+            return False
 
-        # Check for static route mount
-        if not any(route.path.startswith('/static') for route in app.routes):
-             print(f"✗ Required static route is missing")
+        # Check for static route mount separately
+        if not any(r.path.startswith('/static') for r in app.routes):
+             print(f"✗ Required static route mount is missing")
              return False
         
         print("✓ FastAPI app configured correctly")

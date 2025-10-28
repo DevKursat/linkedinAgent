@@ -9,12 +9,18 @@ load_dotenv()
 
 # Configure the Gemini API
 api_key = os.getenv("GEMINI_API_KEY")
+model = None
 if not api_key:
-    raise ValueError("GEMINI_API_KEY not found in .env file.")
-genai.configure(api_key=api_key)
+    print("⚠️ WARNING: GEMINI_API_KEY not found in .env file. AI features will be disabled.")
+else:
+    try:
+        genai.configure(api_key=api_key)
+        # Initialize the model
+        model = genai.GenerativeModel('gemini-pro')
+        print("✅ Gemini AI Model initialized successfully.")
+    except Exception as e:
+        print(f"❌ ERROR: Failed to initialize Gemini AI Model: {e}")
 
-# Initialize the model
-model = genai.GenerativeModel('gemini-pro')
 
 def generate_text(task_prompt: str) -> str:
     """
@@ -26,6 +32,10 @@ def generate_text(task_prompt: str) -> str:
     Returns:
         The generated text as a string.
     """
+    if not model:
+        print("❌ ERROR: Gemini model is not initialized. Cannot generate text.")
+        return "[AI functionality disabled. Please check GEMINI_API_KEY]"
+
     try:
         # Combine the main persona prompt with the specific task prompt
         full_prompt = get_persona_prompt() + "\n\n--- TASK ---\n\n" + task_prompt

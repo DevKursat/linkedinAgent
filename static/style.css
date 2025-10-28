@@ -85,3 +85,23 @@ section {
 .log-item strong {
     color: #4b4f56;
 }
+
+#manual-controls .controls-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+#manual-controls button {
+    background-color: #42b72a;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#manual-controls button:hover {
+    background-color: #36a420;
+}
