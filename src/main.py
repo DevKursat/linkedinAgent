@@ -87,25 +87,43 @@ async def trigger_invite(background_tasks: BackgroundTasks):
     background_tasks.add_task(trigger_invitation)
     return {"message": "Invitation sending triggered successfully."}
 
+import sys
+
 @app.post("/api/auth/login")
 async def interactive_login():
     """
     Triggers the interactive login script to refresh LinkedIn session cookies.
+    This now runs the script in a way that inherits the main terminal for I/O.
     """
     import subprocess
 
     log_action("Authentication", "Interactive login process initiated by user.")
 
-    # Run the script in a non-blocking way
-    process = subprocess.Popen(
-        ['python3', 'interactive_login.py'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
+    print("\n" + "="*60)
+    print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
+    print("="*60 + "\n")
 
-    # We don't wait for it to finish, but we could if we wanted to stream logs.
-    # For now, we just tell the user to check the terminal.
-    return {"message": "Interactive login process started. Please check the application terminal for instructions."}
+    # Run the script ensuring it uses the main process's terminal for input and output
+    try:
+        subprocess.run(
+            [sys.executable, 'interactive_login.py'],
+            check=True, # This will raise an exception if the script fails
+            input=sys.stdin, # Connect script's input to the main terminal's input
+        )
+        message = "Interactive login process completed successfully! Cookies saved."
+        print(f"\n✅ {message}\n")
+        return {"message": message}
+    except subprocess.CalledProcessError as e:
+        message = f"Interactive login script failed with an error: {e}"
+        print(f"\n❌ {message}\n")
+        # Return a 500 error to the frontend to indicate failure
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=message)
+    except Exception as e:
+        message = f"An unexpected error occurred: {e}"
+        print(f"\n❌ {message}\n")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=message)
 
 @app.get("/health")
 def health_check():
