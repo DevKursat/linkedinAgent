@@ -1,31 +1,21 @@
-"""Background worker that runs the scheduler."""
-import time
-from . import db
-from .gemini import init_gemini
-from .scheduler import start_scheduler
+# src/worker.py
 
+from .database import SessionLocal
+from .models import ActionLog
 
-def main():
-    """Main worker function."""
-    print("Starting LinkedIn Agent Worker...")
-    
-    # Initialize database
-    db.init_db()
-    
-    # Initialize Gemini
-    init_gemini()
-    
-    # Start scheduler
-    start_scheduler()
-    
-    # Keep alive
-    print("Worker running. Press Ctrl+C to stop.")
+def log_system_health():
+    """A simple worker function to log a health check message to the database."""
+    db = SessionLocal()
     try:
-        while True:
-            time.sleep(60)
-    except KeyboardInterrupt:
-        print("\nShutting down worker...")
-
-
-if __name__ == '__main__':
-    main()
+        log_entry = ActionLog(
+            action_type="System Health Check",
+            details="Scheduler is running and logging correctly."
+        )
+        db.add(log_entry)
+        db.commit()
+        print("Logged system health check.")
+    except Exception as e:
+        print(f"Error logging system health: {e}")
+        db.rollback()
+    finally:
+        db.close()
