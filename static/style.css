@@ -106,11 +106,13 @@ section {
     background-color: #36a420;
 }
 
-#auth-instructions code {
-    background-color: #e9ecef;
-    padding: 5px 8px;
-    border-radius: 4px;
-    font-family: monospace;
+#auth-controls button {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+#auth-controls button:hover {
+    background-color: #e0a800;
 }
 
 .verify-link {

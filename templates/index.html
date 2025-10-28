@@ -43,15 +43,10 @@
                 <p id="manual-action-status"></p>
             </section>
 
-            <section id="auth-instructions">
-                <h2>Kimlik Doğrulama (Authentication)</h2>
-                <p>Eğer "Eylem Akışı"nda 'CHALLENGE' hatası alırsanız, bu LinkedIn'in güvenlik doğrulaması istediği anlamına gelir. Oturumu yenilemek için:</p>
-                <ol>
-                    <li>Codespace'te <strong>yeni bir terminal sekmesi</strong> açın.</li>
-                    <li>Aşağıdaki komutu kopyalayıp o yeni terminale yapıştırın ve <strong>Enter</strong>'a basın:</li>
-                </ol>
-                <code>python3 interactive_login.py</code>
-                <p>Terminaldeki adımları takip ederek doğrulamayı tamamladıktan sonra, bu sayfayı yenileyip manuel kontrolleri tekrar kullanabilirsiniz.</p>
+            <section id="auth-controls">
+                <h2>Kimlik Doğrulama</h2>
+                <p>Eğer 'CHALLENGE' hatası alırsanız, aşağıdaki düğmeye basıp terminaldeki adımları izleyerek oturumunuzu yenileyin.</p>
+                <button onclick="triggerAction('/api/auth/login', true)">LinkedIn Oturumunu Yenile</button>
             </section>
 
             <section id="activity-feed">
