@@ -39,6 +39,10 @@ def get_linkedin_api():
         elif LINKEDIN_EMAIL and LINKEDIN_PASSWORD:
             print("No valid cookie file found. Falling back to username/password authentication.")
             api = Linkedin(LINKEDIN_EMAIL, LINKEDIN_PASSWORD, refresh_cookies=True)
+            # Manually save the cookies after a successful login
+            with open(COOKIE_PATH, "w") as f:
+                json.dump(api.client.cookies.get_dict(), f)
+            print(f"New session cookies saved to '{COOKIE_PATH}'.")
 
         else:
             raise LinkedInAuthenticationError("LinkedIn credentials (or a cookie file) not found.")
