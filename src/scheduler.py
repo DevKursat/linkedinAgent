@@ -24,24 +24,24 @@ def is_within_operating_hours() -> bool:
     
     return settings.OPERATING_HOURS_START <= current_hour < settings.OPERATING_HOURS_END
 
-def safe_trigger_post_creation():
+async def safe_trigger_post_creation():
     """Wrapper that only triggers post creation during operating hours."""
     if is_within_operating_hours():
-        trigger_post_creation()
+        await trigger_post_creation()
     else:
         print("⏰ Outside operating hours (7 AM - 10 PM). Skipping post creation.")
 
-def safe_trigger_commenting():
+async def safe_trigger_commenting():
     """Wrapper that only triggers commenting during operating hours."""
     if is_within_operating_hours():
-        trigger_commenting()
+        await trigger_commenting()
     else:
         print("⏰ Outside operating hours (7 AM - 10 PM). Skipping commenting.")
 
-def safe_trigger_invitation():
+async def safe_trigger_invitation():
     """Wrapper that only triggers invitation during operating hours."""
     if is_within_operating_hours():
-        trigger_invitation()
+        await trigger_invitation()
     else:
         print("⏰ Outside operating hours (7 AM - 10 PM). Skipping invitation.")
 

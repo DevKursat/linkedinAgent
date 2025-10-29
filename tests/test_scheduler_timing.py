@@ -36,39 +36,42 @@ def test_is_within_operating_hours():
         assert is_within_operating_hours() == True, "9 PM should be within operating hours"
 
 
-def test_safe_triggers_skip_outside_hours():
+@pytest.mark.asyncio
+async def test_safe_triggers_skip_outside_hours():
     """Test that safe trigger functions skip execution outside operating hours."""
     from src.scheduler import safe_trigger_post_creation, safe_trigger_commenting, safe_trigger_invitation
     
     # Mock time outside operating hours (2 AM)
     with patch('src.scheduler.is_within_operating_hours', return_value=False):
         with patch('src.scheduler.trigger_post_creation') as mock_post:
-            safe_trigger_post_creation()
+            await safe_trigger_post_creation()
             mock_post.assert_not_called()
         
         with patch('src.scheduler.trigger_commenting') as mock_comment:
-            safe_trigger_commenting()
+            await safe_trigger_commenting()
             mock_comment.assert_not_called()
         
         with patch('src.scheduler.trigger_invitation') as mock_invite:
-            safe_trigger_invitation()
+            await safe_trigger_invitation()
             mock_invite.assert_not_called()
 
 
-def test_safe_triggers_execute_during_hours():
+@pytest.mark.asyncio
+async def test_safe_triggers_execute_during_hours():
     """Test that safe trigger functions execute during operating hours."""
     from src.scheduler import safe_trigger_post_creation, safe_trigger_commenting, safe_trigger_invitation
+    from unittest.mock import AsyncMock
     
     # Mock time during operating hours (10 AM)
     with patch('src.scheduler.is_within_operating_hours', return_value=True):
-        with patch('src.scheduler.trigger_post_creation') as mock_post:
-            safe_trigger_post_creation()
+        with patch('src.scheduler.trigger_post_creation', new_callable=AsyncMock) as mock_post:
+            await safe_trigger_post_creation()
             mock_post.assert_called_once()
         
-        with patch('src.scheduler.trigger_commenting') as mock_comment:
-            safe_trigger_commenting()
+        with patch('src.scheduler.trigger_commenting', new_callable=AsyncMock) as mock_comment:
+            await safe_trigger_commenting()
             mock_comment.assert_called_once()
         
-        with patch('src.scheduler.trigger_invitation') as mock_invite:
-            safe_trigger_invitation()
+        with patch('src.scheduler.trigger_invitation', new_callable=AsyncMock) as mock_invite:
+            await safe_trigger_invitation()
             mock_invite.assert_called_once()

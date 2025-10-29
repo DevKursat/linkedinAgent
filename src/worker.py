@@ -118,8 +118,8 @@ async def trigger_post_creation_async():
         log_action("Post Creation Failed", f"Unexpected error: {e}")
         return {"success": False, "message": f"Error: {str(e)}"}
 
-def trigger_post_creation():
-    return asyncio.run(trigger_post_creation_async())
+async def trigger_post_creation():
+    return await trigger_post_creation_async()
 
 async def trigger_commenting_async():
     """Full logic for proactive commenting."""
@@ -136,8 +136,8 @@ async def trigger_commenting_async():
         ]
     }
 
-def trigger_commenting():
-    return asyncio.run(trigger_commenting_async())
+async def trigger_commenting():
+    return await trigger_commenting_async()
 
 async def trigger_invitation_async():
     """Full logic for sending a connection invitation."""
@@ -180,5 +180,5 @@ async def trigger_invitation_async():
         log_action("Invitation Failed", f"Unexpected error: {e}")
         return {"success": False, "message": f"Error: {str(e)}"}
 
-def trigger_invitation():
-    return asyncio.run(trigger_invitation_async())
+async def trigger_invitation():
+    return await trigger_invitation_async()
