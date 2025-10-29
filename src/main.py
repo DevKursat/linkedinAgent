@@ -149,18 +149,51 @@ from .worker import trigger_post_creation, trigger_commenting, trigger_invitatio
 
 @app.post("/api/trigger/post")
 async def trigger_post(background_tasks: BackgroundTasks):
-    background_tasks.add_task(trigger_post_creation)
-    return {"message": "Post creation triggered successfully."}
+    result = trigger_post_creation()
+    if result and result.get("success"):
+        return {
+            "success": True,
+            "message": result.get("message", "Post creation triggered successfully."),
+            "url": result.get("url"),
+            "actions": result.get("actions", [])
+        }
+    else:
+        return {
+            "success": False,
+            "message": result.get("message", "Post creation failed.") if result else "Post creation failed."
+        }
 
 @app.post("/api/trigger/comment")
 async def trigger_comment(background_tasks: BackgroundTasks):
-    background_tasks.add_task(trigger_commenting)
-    return {"message": "Proactive commenting triggered successfully."}
+    result = trigger_commenting()
+    if result and result.get("success"):
+        return {
+            "success": True,
+            "message": result.get("message", "Comment triggered successfully."),
+            "url": result.get("url"),
+            "actions": result.get("actions", [])
+        }
+    else:
+        return {
+            "success": False,
+            "message": result.get("message", "Commenting failed.") if result else "Commenting failed."
+        }
 
 @app.post("/api/trigger/invite")
 async def trigger_invite(background_tasks: BackgroundTasks):
-    background_tasks.add_task(trigger_invitation)
-    return {"message": "Invitation sending triggered successfully."}
+    result = trigger_invitation()
+    if result and result.get("success"):
+        return {
+            "success": True,
+            "message": result.get("message", "Invitation triggered successfully."),
+            "url": result.get("url"),
+            "actions": result.get("actions", [])
+        }
+    else:
+        return {
+            "success": False,
+            "message": result.get("message", "Invitation failed.") if result else "Invitation failed."
+        }
 
 @app.get("/health")
 def health_check():

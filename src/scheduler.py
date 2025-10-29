@@ -52,16 +52,16 @@ def setup_scheduler():
     if not scheduler.running:
         # --- Add Core Automation Jobs ---
 
-        # 1. Post Creation Job: Runs once a day at a random time between 7 AM and 10 PM on all days.
+        # 1. Post Creation Job: Runs 2-3 times per day at strategic times.
         scheduler.add_job(
             safe_trigger_post_creation,
             trigger=CronTrigger(
-                hour='7-21',  # 7 AM to 9 PM (last run at 9 PM allows completion by 10 PM)
-                minute='*/15', # Check every 15 mins to pick a random minute
+                hour='9,14,19',  # Run at 9 AM, 2 PM, and 7 PM (3 times per day)
+                minute='0',
                 jitter=1800 # Add randomness of up to 30 minutes
             ),
             id='daily_post_creation',
-            name='Create and publish a new LinkedIn post daily during operating hours.',
+            name='Create and publish a new LinkedIn post 3 times daily at optimal times.',
             replace_existing=True
         )
 
