@@ -6,6 +6,8 @@ import json
 
 # We need to import the module itself to reload it and reset its state
 import src.linkedin_client
+# Import the credentials to verify against them
+from src import credentials
 
 # We import the functions we want to test
 from src.linkedin_client import get_linkedin_api, COOKIE_PATH
@@ -30,42 +32,35 @@ class TestLinkedInClient(unittest.TestCase):
         # Clean up the cached client
         src.linkedin_client._linkedin_api_client = None
 
-    def test_login_with_credentials_saves_cookies(self):
+    @patch('src.linkedin_client.Linkedin')
+    @patch('builtins.open', new_callable=mock_open)
+    @patch('json.dump')
+    def test_login_with_credentials_saves_cookies(self, mock_json_dump, mock_open, mock_linkedin):
         """
-        Test that when logging in with email/password, cookies are manually saved.
+        Test that when no cookie file exists, the app uses the credentials
+        from credentials.py and saves the new cookies.
         """
-        # Arrange: Use patch.dict to temporarily set environment variables
-        with patch.dict(os.environ, {'LINKEDIN_EMAIL': 'test@example.com', 'LINKEDIN_PASSWORD': 'password'}):
-            # Reload the module to make it pick up the new environment variables
-            importlib.reload(src.linkedin_client)
-            # We must import the function AFTER the reload
-            from src.linkedin_client import get_linkedin_api
+        # Arrange
+        mock_api = MagicMock()
+        mock_api.client.cookies.get_dict.return_value = {"JSESSIONID": "some_dummy_cookie"}
+        mock_linkedin.return_value = mock_api
+        from src.linkedin_client import get_linkedin_api
 
-            # Act: Use patch as a context manager AFTER the reload
-            with patch('src.linkedin_client.Linkedin') as mock_linkedin, \
-                 patch('builtins.open', new_callable=mock_open) as mock_file_open, \
-                 patch('json.dump') as mock_json_dump:
+        # Act
+        api = get_linkedin_api()
 
-                # Configure the mock Linkedin API object
-                mock_api = MagicMock()
-                mock_api.client.cookies.get_dict.return_value = {"JSESSIONID": "some_dummy_cookie"}
-                mock_linkedin.return_value = mock_api
-
-                # Call the function under test
-                api = get_linkedin_api()
-
-                # Assert
-                self.assertIsNotNone(api)
-                # 1. Verify Linkedin was called for authentication without the cookie path
-                mock_linkedin.assert_called_once_with(
-                    'test@example.com',
-                    'password',
-                    refresh_cookies=True
-                )
-                # 2. Verify the cookie file was opened for writing
-                mock_file_open.assert_called_once_with(COOKIE_PATH, "w")
-                # 3. Verify that the cookies were dumped to the file
-                mock_json_dump.assert_called_once_with({"JSESSIONID": "some_dummy_cookie"}, mock_file_open())
+        # Assert
+        self.assertIsNotNone(api)
+        # 1. Verify Linkedin was called with the correct credentials from the file
+        mock_linkedin.assert_called_once_with(
+            credentials.LINKEDIN_EMAIL,
+            credentials.LINKEDIN_PASSWORD,
+            refresh_cookies=True
+        )
+        # 2. Verify the cookie file was opened for writing
+        mock_open.assert_called_once_with(COOKIE_PATH, "w")
+        # 3. Verify that the cookies were dumped to the file
+        mock_json_dump.assert_called_once_with({"JSESSIONID": "some_dummy_cookie"}, mock_open())
 
     def test_login_with_existing_cookies(self):
         """
@@ -80,7 +75,6 @@ class TestLinkedInClient(unittest.TestCase):
             mock_api = MagicMock()
             mock_linkedin.return_value = mock_api
 
-            # No reload needed here, but we still import locally for consistency
             from src.linkedin_client import get_linkedin_api
             api = get_linkedin_api()
 
