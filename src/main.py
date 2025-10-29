@@ -149,7 +149,7 @@ from .worker import trigger_post_creation, trigger_commenting, trigger_invitatio
 
 @app.post("/api/trigger/post")
 async def trigger_post(background_tasks: BackgroundTasks):
-    result = trigger_post_creation()
+    result = await trigger_post_creation()
     if result and result.get("success"):
         return {
             "success": True,
@@ -165,7 +165,7 @@ async def trigger_post(background_tasks: BackgroundTasks):
 
 @app.post("/api/trigger/comment")
 async def trigger_comment(background_tasks: BackgroundTasks):
-    result = trigger_commenting()
+    result = await trigger_commenting()
     if result and result.get("success"):
         return {
             "success": True,
@@ -181,7 +181,7 @@ async def trigger_comment(background_tasks: BackgroundTasks):
 
 @app.post("/api/trigger/invite")
 async def trigger_invite(background_tasks: BackgroundTasks):
-    result = trigger_invitation()
+    result = await trigger_invitation()
     if result and result.get("success"):
         return {
             "success": True,
