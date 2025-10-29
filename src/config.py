@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     @classmethod
     def coalesce_api_keys(cls, values: dict[str, Any]) -> dict[str, Any]:
         """
-        Use GOOGLE_API_KEY as a fallback for GEMINI_API_KEY.
+        Use GOOGLE_API_KEY as a fallback for GEMINI_API_KEY for backward compatibility.
+        The API key is optional; AI features will be disabled if not provided.
         """
         if 'GEMINI_API_KEY' not in values and 'GOOGLE_API_KEY' in values:
             values['GEMINI_API_KEY'] = values['GOOGLE_API_KEY']
