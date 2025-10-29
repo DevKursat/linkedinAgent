@@ -6,37 +6,36 @@ from dotenv import load_dotenv
 from linkedin_api import Linkedin
 from linkedin_api.client import ChallengeException
 
-# Load environment variables from .env file
-load_dotenv()
-LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
-LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
+# Define constants at the module level
 COOKIE_PATH = "linkedin_cookies.json"
 
 def main():
     """
-    Performs an interactive login to LinkedIn using the standard library flow,
-    which prompts for challenges in the console, and then saves the
-    session cookies to a file.
+    Performs an interactive login to LinkedIn. It loads credentials at runtime,
+    prompts for challenges, and saves session cookies.
     """
+    # --- Load environment variables inside main() ---
+    # This ensures that the script finds the .env file correctly
+    # even when called as a subprocess from a different working directory.
+    load_dotenv()
+    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
+    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
+    # --- End of loading ---
+
     if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
         print("❌ ERROR: Please ensure LINKEDIN_EMAIL and LINKEDIN_PASSWORD are set in your .env file.")
-        # Exit with a non-zero status code to indicate failure
         sys.exit(1)
 
     print("🚀 Attempting to authenticate with LinkedIn...")
     print("If a security challenge (like a PIN) is required, you will be prompted to enter it below.")
 
     try:
-        # The standard Linkedin client will automatically prompt for challenges in the console.
-        # We set refresh_cookies=True to ensure we get a fresh session.
         api = Linkedin(
             LINKEDIN_EMAIL,
             LINKEDIN_PASSWORD,
             refresh_cookies=True,
         )
 
-        # After successful authentication, save the session cookies.
-        # The cookies are stored in the client's session object.
         with open(COOKIE_PATH, "w") as f:
             json.dump(api.client.cookies.get_dict(), f)
 
