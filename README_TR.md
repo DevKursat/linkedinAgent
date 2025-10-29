@@ -2,6 +2,8 @@
 
 > 🎉 **Tüm LinkedIn API hataları düzeltildi! Artık hata almayacaksınız.**
 
+> 🪟 **Windows'ta Docker "Access Denied" hatası mı alıyorsunuz?** → [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md)
+
 ## 📚 Dokümantasyon Dosyaları
 
 ### Başlangıç İçin (Yeni Kullanıcılar)
@@ -23,6 +25,12 @@
    - LinkedIn Developer Portal ayarları
    - Test yapma ve canlıya alma
    - Sorun giderme
+
+4. **[WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md)** - 🪟 Windows Docker sorunları
+   - "Access Denied" hatası çözümü
+   - Docker Desktop başlatma adımları
+   - Alternatif Python kurulum yöntemi
+   - Adım adım Windows rehberi
 
 ### Teknik Dokümantasyon
 
@@ -62,6 +70,9 @@
 **Teknik detayları merak ediyorum:**
 → [HATA_COZUMU.md](HATA_COZUMU.md) ve [LINKEDIN_API_MIGRATION.md](LINKEDIN_API_MIGRATION.md)
 
+**Windows'ta Docker sorunum var:**
+→ [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md)
+
 ### 2. Minimum Adımlar
 
 ```bash
@@ -73,7 +84,10 @@ cd linkedinAgent
 copy .env.example .env
 # (Sonra .env dosyasını düzenle)
 
-# 3. Başlat (Docker)
+# 3. Docker kontrolü (önerilir, özellikle Windows için)
+python check_docker.py
+
+# 4. Başlat (Docker)
 docker compose up -d --build
 
 # 4. Tarayıcıda aç
