@@ -1,42 +1,106 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy.orm import Session
 from . import models
-from .database import engine
+from .database import engine, SessionLocal
 import pytz
 from dotenv import load_dotenv
 import os
+import datetime
+import httpx
+from typing import List
+from pydantic import BaseModel
+import urllib.parse
 
-# --- Robust Credential Loading ---
-try:
-    from . import credentials
-    LINKEDIN_EMAIL = credentials.LINKEDIN_EMAIL
-    LINKEDIN_PASSWORD = credentials.LINKEDIN_PASSWORD
-    print("Loaded credentials from credentials.py for main app")
-except ImportError:
-    load_dotenv()
-    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
-    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
-    print("credentials.py not found, loaded credentials from .env for main app")
-# --- End of Credential Loading ---
+# --- Configuration Loading ---
+# Load credentials from .env file for OAuth details
+load_dotenv()
+LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID")
+LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET")
+LINKEDIN_REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI")
+# --- End of Loading ---
 
 models.Base.metadata.create_all(bind=engine)
 
 from .scheduler import setup_scheduler, shutdown_scheduler, scheduler
-from typing import List
-from pydantic import BaseModel
-import datetime
 
 app = FastAPI()
 
+# --- Dependency to get a DB session ---
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- OAuth 2.0 Authentication Flow ---
+
+@app.get("/login")
+async def linkedin_login():
+    """
+    Redirects the user to LinkedIn's official authorization page.
+    """
+    params = {
+        "response_type": "code",
+        "client_id": LINKEDIN_CLIENT_ID,
+        "redirect_uri": LINKEDIN_REDIRECT_URI,
+        "state": "some_random_string",  # Should be a random string for security
+        "scope": "openid profile w_member_social",
+    }
+    auth_url = "https://www.linkedin.com/oauth/v2/authorization?" + urllib.parse.urlencode(params)
+    return RedirectResponse(url=auth_url)
+
+@app.get("/callback")
+async def linkedin_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    Handles the callback from LinkedIn, exchanges the code for an access token,
+    and stores the token securely.
+    """
+    token_url = "https://www.linkedin.com/oauth/v2/accessToken"
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": LINKEDIN_REDIRECT_URI,
+        "client_id": LINKEDIN_CLIENT_ID,
+        "client_secret": LINKEDIN_CLIENT_SECRET,
+    }
+
+    async with httpx.AsyncClient() as client:
+        response = await client.post(token_url, data=payload)
+
+    if response.status_code != 200:
+        return HTMLResponse(f"<h1>Error</h1><p>Could not retrieve access token: {response.text}</p>")
+
+    token_data = response.json()
+    access_token = token_data.get("access_token")
+
+    # Store the access token securely (e.g., in the database)
+    # For simplicity, we'll store it in a temporary file. In production, use a DB.
+    with open("linkedin_token.json", "w") as f:
+        f.write(access_token)
+
+    return RedirectResponse(url="/")
+
+@app.get("/logout")
+async def logout():
+    """
+    Logs the user out by deleting the token file.
+    """
+    if os.path.exists("linkedin_token.json"):
+        os.remove("linkedin_token.json")
+    return RedirectResponse(url="/")
+
+
+# --- UI and API Endpoints ---
 class JobModel(BaseModel):
     id: str
     next_run_time: datetime.datetime
 
 @app.get("/api/scheduled-jobs", response_model=List[JobModel])
 async def get_scheduled_jobs():
-    """Returns a list of all scheduled jobs."""
     jobs = []
     for job in scheduler.get_jobs():
         jobs.append(JobModel(id=job.id, next_run_time=job.next_run_time))
@@ -50,24 +114,15 @@ async def startup_event():
 async def shutdown_event():
     shutdown_scheduler()
 
-from starlette.staticfiles import StaticFiles
-
-# Determine the absolute path to the project root's "static" and "templates" directory
-# This makes the app runnable from any directory
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_file_path, '..'))
 static_dir = os.path.join(project_root, 'static')
 templates_dir = os.path.join(project_root, 'templates')
 
-
-# Mount static files
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
-# Setup templates
 templates = Jinja2Templates(directory=templates_dir)
 
 def format_datetime_istanbul(dt: datetime.datetime):
-    """Converts a UTC datetime object to Istanbul time and formats it."""
     if dt.tzinfo is None:
         dt = pytz.utc.localize(dt)
     istanbul_tz = pytz.timezone("Europe/Istanbul")
@@ -75,27 +130,19 @@ def format_datetime_istanbul(dt: datetime.datetime):
 
 templates.env.filters["istanbul_time"] = format_datetime_istanbul
 
-from sqlalchemy.orm import Session
-from fastapi import Depends
-from .database import SessionLocal
 from .models import ActionLog
-
-# Dependency to get a DB session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request, db: Session = Depends(get_db)):
     logs = db.query(ActionLog).order_by(ActionLog.timestamp.desc()).limit(10).all()
-    return templates.TemplateResponse("index.html", {"request": request, "logs": logs})
+    # Check if logged in
+    is_logged_in = os.path.exists("linkedin_token.json")
+    return templates.TemplateResponse("index.html", {"request": request, "logs": logs, "is_logged_in": is_logged_in})
 
 from fastapi import BackgroundTasks
-from .worker import trigger_post_creation, trigger_commenting, trigger_invitation, log_action
+from .worker import trigger_post_creation, trigger_commenting, trigger_invitation
 
+# ... (rest of the API endpoints remain the same) ...
 @app.post("/api/trigger/post")
 async def trigger_post(background_tasks: BackgroundTasks):
     background_tasks.add_task(trigger_post_creation)
@@ -110,45 +157,6 @@ async def trigger_comment(background_tasks: BackgroundTasks):
 async def trigger_invite(background_tasks: BackgroundTasks):
     background_tasks.add_task(trigger_invitation)
     return {"message": "Invitation sending triggered successfully."}
-
-import sys
-
-@app.post("/api/auth/login")
-async def interactive_login():
-    """
-    Triggers the interactive login script, passing the robustly loaded
-    credentials as command-line arguments.
-    """
-    import subprocess
-
-    log_action("Authentication", "Interactive login process initiated by user.")
-
-    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail="LinkedIn credentials not found in credentials.py or .env file.")
-
-    print("\n" + "="*60)
-    print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
-    print("="*60 + "\n")
-
-    try:
-        subprocess.run(
-            [sys.executable, 'interactive_login.py', LINKEDIN_EMAIL, LINKEDIN_PASSWORD],
-            check=True
-        )
-        message = "Interactive login process completed successfully! Cookies saved."
-        print(f"\n✅ {message}\n")
-        return {"message": message}
-    except subprocess.CalledProcessError as e:
-        message = f"Interactive login script failed with an error: {e}"
-        print(f"\n❌ {message}\n")
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=message)
-    except Exception as e:
-        message = f"An unexpected error occurred: {e}"
-        print(f"\n❌ {message}\n")
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail=message)
 
 @app.get("/health")
 def health_check():
