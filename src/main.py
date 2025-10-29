@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from . import models
 from .database import engine
+from dotenv import load_dotenv
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -105,24 +106,32 @@ import sys
 @app.post("/api/auth/login")
 async def interactive_login():
     """
-    Triggers the interactive login script to refresh LinkedIn session cookies.
-    This now runs the script in a way that inherits the main terminal for I/O.
+    Triggers the interactive login script, passing credentials directly
+    as command-line arguments for robustness.
     """
     import subprocess
 
     log_action("Authentication", "Interactive login process initiated by user.")
 
+    # --- Load credentials directly from .env to pass as arguments ---
+    load_dotenv()
+    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
+    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
+
+    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Missing LINKEDIN_EMAIL or LINKEDIN_PASSWORD in .env file.")
+    # --- End of loading ---
+
     print("\n" + "="*60)
     print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
     print("="*60 + "\n")
 
-    # Run the script ensuring it uses the main process's terminal for input and output
     try:
-        # By default, the subprocess inherits the standard input/output of the parent.
-        # Removing `input=sys.stdin` fixes the TypeError and allows direct interaction.
+        # Pass credentials as direct command-line arguments
         subprocess.run(
-            [sys.executable, 'interactive_login.py'],
-            check=True  # This will raise an exception if the script fails
+            [sys.executable, 'interactive_login.py', LINKEDIN_EMAIL, LINKEDIN_PASSWORD],
+            check=True
         )
         message = "Interactive login process completed successfully! Cookies saved."
         print(f"\n✅ {message}\n")
@@ -130,7 +139,6 @@ async def interactive_login():
     except subprocess.CalledProcessError as e:
         message = f"Interactive login script failed with an error: {e}"
         print(f"\n❌ {message}\n")
-        # Return a 500 error to the frontend to indicate failure
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=message)
     except Exception as e:
