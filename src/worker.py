@@ -124,55 +124,17 @@ def trigger_post_creation():
 async def trigger_commenting_async():
     """Full logic for proactive commenting."""
     log_action("Commenting Triggered", "Process initiated.")
-    api_client = get_api_client()
-    if not api_client: 
-        return {"success": False, "message": "API client initialization failed"}
-
-    try:
-        keywords = "teknoloji or yazılım or girişimcilik"
-        posts = await api_client.search_for_posts(keywords, count=1)
-        if not posts:
-            log_action("Commenting Failed", "No relevant posts found.")
-            return {"success": False, "message": "No relevant posts found to comment on"}
-
-        target_post = posts[0]
-        post_urn = target_post.get("id")
-        post_text = target_post.get("text", "")
-
-        if not post_urn or not post_text:
-            log_action("Commenting Failed", "Found post is missing URN or content.")
-            return {"success": False, "message": "Found post is incomplete"}
-
-        comment_prompt = f"Write a short, insightful, and witty comment in Turkish for a LinkedIn post with this content: '{post_text}'"
-        comment_text = generate_text(comment_prompt)
-        if not comment_text:
-            log_action("Commenting Failed", "AI failed to generate a comment.")
-            return {"success": False, "message": "AI comment generation failed"}
-
-        profile = await api_client.get_profile()
-        user_urn = profile.get("id")
-        if not user_urn:
-            log_action("Commenting Failed", "Could not get user URN.")
-            return {"success": False, "message": "Could not get user profile"}
-
-        await api_client.submit_comment(user_urn, post_urn, comment_text)
-        post_url = f"https://www.linkedin.com/feed/update/{post_urn}/"
-        log_action("Proactive Comment Added", "Successfully commented on a post.", url=post_url)
-
-        return {
-            "success": True,
-            "message": "Comment posted successfully",
-            "url": post_url,
-            "actions": [
-                f"✅ Yorum paylaşıldı",
-                f"✅ Hedef gönderi: {post_text[:50]}...",
-                f"✅ Yorum: {comment_text[:80]}..."
-            ]
-        }
-
-    except Exception as e:
-        log_action("Commenting Failed", f"Unexpected error: {e}")
-        return {"success": False, "message": f"Error: {str(e)}"}
+    
+    # Note: LinkedIn search API is deprecated, commenting feature is currently unavailable
+    log_action("Commenting Skipped", "LinkedIn search endpoint has been deprecated. Manual commenting via UI is still available.")
+    return {
+        "success": False, 
+        "message": "LinkedIn search API is deprecated. Use manual commenting via the web UI instead.",
+        "actions": [
+            "⚠️ LinkedIn arama API'si kullanımdan kaldırıldı",
+            "ℹ️ Manuel yorum yapmak için web arayüzünü kullanın",
+        ]
+    }
 
 def trigger_commenting():
     return asyncio.run(trigger_commenting_async())
