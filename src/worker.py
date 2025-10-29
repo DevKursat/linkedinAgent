@@ -94,13 +94,13 @@ async def trigger_post_creation_async():
         post_url = f"https://www.linkedin.com/feed/update/{post_urn}/"
         log_action("Post Created", f"Shared post: {article.title}", url=post_url)
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(45)
         await api_client.add_reaction(user_urn, post_urn)
-        log_action("Post Liked", "Liked our own post.", url=post_url)
+        log_action("Post Liked", "Liked our own post after 45 seconds.", url=post_url)
 
-        await asyncio.sleep(60)
+        await asyncio.sleep(45)
         await api_client.submit_comment(user_urn, post_urn, summary_text)
-        log_action("Summary Comment Added", "Added Turkish summary.", url=post_url)
+        log_action("Summary Comment Added", "Added Turkish summary after 90 seconds total.", url=post_url)
 
     except Exception as e:
         log_action("Post Creation Failed", f"Unexpected error: {e}")

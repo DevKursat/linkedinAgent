@@ -1,6 +1,9 @@
 # src/scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from datetime import datetime
+import pytz
+from .config import settings
 from .worker import (
     trigger_post_creation,
     trigger_commenting,
@@ -10,6 +13,38 @@ from .worker import (
 # Create a scheduler instance
 scheduler = AsyncIOScheduler(timezone="Europe/Istanbul") # Set to user's timezone
 
+def is_within_operating_hours() -> bool:
+    """
+    Check if current time is within operating hours (7 AM - 10 PM Istanbul time).
+    Returns True if within operating hours, False otherwise.
+    """
+    tz = pytz.timezone("Europe/Istanbul")
+    now = datetime.now(tz)
+    current_hour = now.hour
+    
+    return settings.OPERATING_HOURS_START <= current_hour < settings.OPERATING_HOURS_END
+
+def safe_trigger_post_creation():
+    """Wrapper that only triggers post creation during operating hours."""
+    if is_within_operating_hours():
+        trigger_post_creation()
+    else:
+        print("⏰ Outside operating hours (7 AM - 10 PM). Skipping post creation.")
+
+def safe_trigger_commenting():
+    """Wrapper that only triggers commenting during operating hours."""
+    if is_within_operating_hours():
+        trigger_commenting()
+    else:
+        print("⏰ Outside operating hours (7 AM - 10 PM). Skipping commenting.")
+
+def safe_trigger_invitation():
+    """Wrapper that only triggers invitation during operating hours."""
+    if is_within_operating_hours():
+        trigger_invitation()
+    else:
+        print("⏰ Outside operating hours (7 AM - 10 PM). Skipping invitation.")
+
 def setup_scheduler():
     """
     Initializes, adds all jobs, and starts the scheduler.
@@ -17,46 +52,43 @@ def setup_scheduler():
     if not scheduler.running:
         # --- Add Core Automation Jobs ---
 
-        # 1. Post Creation Job: Runs once a day at a random time between 9 AM and 5 PM on weekdays.
+        # 1. Post Creation Job: Runs once a day at a random time between 7 AM and 10 PM on all days.
         scheduler.add_job(
-            trigger_post_creation,
+            safe_trigger_post_creation,
             trigger=CronTrigger(
-                day_of_week='mon-fri',
-                hour='9-17',
+                hour='7-21',  # 7 AM to 9 PM (last run at 9 PM allows completion by 10 PM)
                 minute='*/15', # Check every 15 mins to pick a random minute
                 jitter=1800 # Add randomness of up to 30 minutes
             ),
             id='daily_post_creation',
-            name='Create and publish a new LinkedIn post daily.',
+            name='Create and publish a new LinkedIn post daily during operating hours.',
             replace_existing=True
         )
 
-        # 2. Proactive Commenting Job: Runs every 2-3 hours on weekdays.
+        # 2. Proactive Commenting Job: Runs every 2-3 hours during operating hours.
         scheduler.add_job(
-            trigger_commenting,
+            safe_trigger_commenting,
             trigger=CronTrigger(
-                day_of_week='mon-fri',
-                hour='9-18',
+                hour='7-21',  # 7 AM to 9 PM
                 minute='30', # Run at half past the hour
                 jitter=900 # Add randomness of up to 15 minutes
             ),
             id='proactive_commenting',
-            name='Find and comment on a relevant post.',
+            name='Find and comment on a relevant post during operating hours.',
             replace_existing=True,
             misfire_grace_time=900
         )
 
         # 3. Invitation Sending Job: Runs multiple times a day to spread out invitations.
         scheduler.add_job(
-            trigger_invitation,
+            safe_trigger_invitation,
             trigger=CronTrigger(
-                day_of_week='mon-fri',
-                hour='9,11,14,16', # Run 4 times a day
+                hour='7,9,11,14,16,19,21', # Run 7 times a day during operating hours
                 minute='0',
                 jitter=1200 # Add randomness of up to 20 minutes
             ),
             id='send_invitations',
-            name='Send connection invitations.',
+            name='Send connection invitations during operating hours.',
             replace_existing=True
         )
 
@@ -64,7 +96,7 @@ def setup_scheduler():
         # scheduler.add_job(log_system_health, 'interval', seconds=30, id='health_check')
 
         scheduler.start()
-        print("✅ Scheduler started and all automation jobs are configured.")
+        print("✅ Scheduler started and all automation jobs are configured (7 AM - 10 PM).")
 
 def shutdown_scheduler():
     """

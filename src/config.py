@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     LINKEDIN_CLIENT_ID: str
     LINKEDIN_CLIENT_SECRET: str
     LINKEDIN_REDIRECT_URI: str
+    
+    # Operating Hours Configuration
+    OPERATING_HOURS_START: int = 7  # 7 AM
+    OPERATING_HOURS_END: int = 22  # 10 PM (22:00)
 
     @model_validator(mode='before')
     @classmethod
