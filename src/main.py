@@ -70,7 +70,7 @@ async def read_dashboard(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse("index.html", {"request": request, "logs": logs})
 
 from fastapi import BackgroundTasks
-from .worker import trigger_post_creation, trigger_commenting, trigger_invitation
+from .worker import trigger_post_creation, trigger_commenting, trigger_invitation, log_action
 
 @app.post("/api/trigger/post")
 async def trigger_post(background_tasks: BackgroundTasks):
