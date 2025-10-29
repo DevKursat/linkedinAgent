@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from . import models
 from .database import engine, SessionLocal
-from .config import settings  # Import centralized settings
+from .config import settings
 import pytz
 import os
 import datetime
@@ -13,7 +13,9 @@ import httpx
 from typing import List
 from pydantic import BaseModel
 import urllib.parse
+from pathlib import Path
 
+# Create all tables
 models.Base.metadata.create_all(bind=engine)
 
 from .scheduler import setup_scheduler, shutdown_scheduler, scheduler
@@ -32,14 +34,12 @@ def get_db():
 
 @app.get("/login")
 async def linkedin_login():
-    """
-    Redirects the user to LinkedIn's official authorization page.
-    """
+    """Redirects the user to LinkedIn's authorization page."""
     params = {
         "response_type": "code",
         "client_id": settings.LINKEDIN_CLIENT_ID,
         "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
-        "state": "some_random_string",  # Should be a random string for security
+        "state": "some_random_string",
         "scope": "openid profile w_member_social",
     }
     auth_url = "https://www.linkedin.com/oauth/v2/authorization?" + urllib.parse.urlencode(params)
@@ -47,10 +47,7 @@ async def linkedin_login():
 
 @app.get("/callback")
 async def linkedin_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """
-    Handles the callback from LinkedIn, exchanges the code for an access token,
-    and stores the token securely.
-    """
+    """Handles the callback, exchanges the code for a token, and stores it in the database."""
     token_url = "https://www.linkedin.com/oauth/v2/accessToken"
     payload = {
         "grant_type": "authorization_code",
@@ -69,20 +66,34 @@ async def linkedin_callback(code: str, state: str, db: Session = Depends(get_db)
     token_data = response.json()
     access_token = token_data.get("access_token")
 
-    # Store the access token securely (e.g., in the database)
-    # For simplicity, we'll store it in a temporary file. In production, use a DB.
-    with open("linkedin_token.json", "w") as f:
-        f.write(access_token)
+    if not access_token:
+        return HTMLResponse("<h1>Error</h1><p>Access token not found in response.</p>", status_code=400)
+
+    try:
+        # Clear any old tokens and save the new one
+        db.query(models.Token).delete()
+        new_token = models.Token(access_token=access_token)
+        db.add(new_token)
+        db.commit()
+        print("Access token successfully saved to the database.")
+    except Exception as e:
+        db.rollback()
+        print(f"CRITICAL: Failed to save access token to database. Error: {e}")
+        return HTMLResponse(f"<h1>Error</h1><p>Could not save access token to database: {e}</p>", status_code=500)
 
     return RedirectResponse(url="/")
 
+
 @app.get("/logout")
-async def logout():
-    """
-    Logs the user out by deleting the token file.
-    """
-    if os.path.exists("linkedin_token.json"):
-        os.remove("linkedin_token.json")
+async def logout(db: Session = Depends(get_db)):
+    """Logs the user out by deleting the token from the database."""
+    try:
+        db.query(models.Token).delete()
+        db.commit()
+        print("Token successfully deleted from the database.")
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting token from database: {e}")
     return RedirectResponse(url="/")
 
 
@@ -106,6 +117,7 @@ async def startup_event():
 async def shutdown_event():
     shutdown_scheduler()
 
+# Setup templates and static files
 current_file_path = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_file_path, '..'))
 static_dir = os.path.join(project_root, 'static')
@@ -127,14 +139,14 @@ from .models import ActionLog
 @app.get("/", response_class=HTMLResponse)
 async def read_dashboard(request: Request, db: Session = Depends(get_db)):
     logs = db.query(ActionLog).order_by(ActionLog.timestamp.desc()).limit(10).all()
-    # Check if logged in
-    is_logged_in = os.path.exists("linkedin_token.json")
+    # Check if logged in by looking for a token in the database
+    token = db.query(models.Token).first()
+    is_logged_in = token is not None
     return templates.TemplateResponse("index.html", {"request": request, "logs": logs, "is_logged_in": is_logged_in})
 
 from fastapi import BackgroundTasks
 from .worker import trigger_post_creation, trigger_commenting, trigger_invitation
 
-# ... (rest of the API endpoints remain the same) ...
 @app.post("/api/trigger/post")
 async def trigger_post(background_tasks: BackgroundTasks):
     background_tasks.add_task(trigger_post_creation)

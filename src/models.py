@@ -34,3 +34,10 @@ class Invitation(Base):
     id = Column(Integer, primary_key=True, index=True)
     profile_url = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Token(Base):
+    __tablename__ = "tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    access_token = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

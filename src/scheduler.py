@@ -2,7 +2,6 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from .worker import (
-    log_system_health,
     trigger_post_creation,
     trigger_commenting,
     trigger_invitation
