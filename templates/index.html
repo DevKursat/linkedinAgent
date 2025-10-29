@@ -45,8 +45,13 @@
 
             <section id="auth-controls">
                 <h2>Kimlik Doğrulama</h2>
-                <p>Eğer 'CHALLENGE' hatası alırsanız, aşağıdaki düğmeye basıp terminaldeki adımları izleyerek oturumunuzu yenileyin.</p>
-                <button onclick="triggerAction('/api/auth/login', true)">LinkedIn Oturumunu Yenile</button>
+                {% if is_logged_in %}
+                    <p>LinkedIn hesabınızla başarıyla giriş yapıldı.</p>
+                    <p><a href="/logout">Çıkış Yap</a></p>
+                {% else %}
+                    <p>Botun çalışabilmesi için LinkedIn hesabınızla oturum açmanız gerekmektedir.</p>
+                    <a href="/login" class="button">LinkedIn ile Giriş Yap</a>
+                {% endif %}
             </section>
 
             <section id="activity-feed">
