@@ -5,22 +5,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from . import models
 from .database import engine, SessionLocal
+from .config import settings  # Import centralized settings
 import pytz
-from dotenv import load_dotenv
 import os
 import datetime
 import httpx
 from typing import List
 from pydantic import BaseModel
 import urllib.parse
-
-# --- Configuration Loading ---
-# Load credentials from .env file for OAuth details
-load_dotenv()
-LINKEDIN_CLIENT_ID = os.getenv("LINKEDIN_CLIENT_ID")
-LINKEDIN_CLIENT_SECRET = os.getenv("LINKEDIN_CLIENT_SECRET")
-LINKEDIN_REDIRECT_URI = os.getenv("LINKEDIN_REDIRECT_URI")
-# --- End of Loading ---
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -45,8 +37,8 @@ async def linkedin_login():
     """
     params = {
         "response_type": "code",
-        "client_id": LINKEDIN_CLIENT_ID,
-        "redirect_uri": LINKEDIN_REDIRECT_URI,
+        "client_id": settings.LINKEDIN_CLIENT_ID,
+        "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
         "state": "some_random_string",  # Should be a random string for security
         "scope": "openid profile w_member_social",
     }
@@ -63,9 +55,9 @@ async def linkedin_callback(code: str, state: str, db: Session = Depends(get_db)
     payload = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": LINKEDIN_REDIRECT_URI,
-        "client_id": LINKEDIN_CLIENT_ID,
-        "client_secret": LINKEDIN_CLIENT_SECRET,
+        "redirect_uri": settings.LINKEDIN_REDIRECT_URI,
+        "client_id": settings.LINKEDIN_CLIENT_ID,
+        "client_secret": settings.LINKEDIN_CLIENT_SECRET,
     }
 
     async with httpx.AsyncClient() as client:
