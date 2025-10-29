@@ -105,10 +105,11 @@ async def interactive_login():
 
     # Run the script ensuring it uses the main process's terminal for input and output
     try:
+        # By default, the subprocess inherits the standard input/output of the parent.
+        # Removing `input=sys.stdin` fixes the TypeError and allows direct interaction.
         subprocess.run(
             [sys.executable, 'interactive_login.py'],
-            check=True, # This will raise an exception if the script fails
-            input=sys.stdin, # Connect script's input to the main terminal's input
+            check=True  # This will raise an exception if the script fails
         )
         message = "Interactive login process completed successfully! Cookies saved."
         print(f"\n✅ {message}\n")
