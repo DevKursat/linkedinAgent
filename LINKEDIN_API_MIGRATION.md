@@ -121,7 +121,7 @@ The changes are backward compatible:
 ## Timeline
 
 - **October 2024:** LinkedIn started deprecating `/v2/me` and search endpoints
-- **October 29, 2025:** linkedinAgent updated to use OpenID Connect
+- **October 29, 2024:** linkedinAgent updated to use OpenID Connect
 - **Future:** LinkedIn may provide new discovery/search APIs (status unknown)
 
 ## Need Help?
