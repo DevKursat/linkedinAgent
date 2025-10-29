@@ -2,6 +2,7 @@
 import asyncio
 import feedparser
 import random
+import httpx
 from .database import SessionLocal
 from .models import ActionLog
 from .ai_core import generate_text
@@ -75,9 +76,10 @@ async def trigger_post_creation_async():
     summary_prompt = f"Summarize the key points of this article titled '{article.title}' in Turkish, for a follow-up comment."
     summary_text = generate_text(summary_prompt)
 
-    if not post_text or not summary_text:
-        log_action("Post Creation Failed", "AI content generation failed.")
-        return {"success": False, "message": "AI content generation failed"}
+    if post_text is None or summary_text is None:
+        error_msg = "AI content generation is not available. Please check GEMINI_API_KEY configuration."
+        log_action("Post Creation Skipped", error_msg)
+        return {"success": False, "message": error_msg}
 
     try:
         profile = await api_client.get_profile()
@@ -126,13 +128,13 @@ async def trigger_commenting_async():
     log_action("Commenting Triggered", "Process initiated.")
     
     # Note: LinkedIn search API is deprecated, commenting feature is currently unavailable
-    log_action("Commenting Skipped", "LinkedIn search endpoint has been deprecated. Manual commenting via UI is still available.")
+    log_action("Commenting Skipped", "LinkedIn search endpoint has been deprecated by LinkedIn. Manual commenting via UI is still available.")
     return {
-        "success": False, 
-        "message": "LinkedIn search API is deprecated. Use manual commenting via the web UI instead.",
+        "success": True,  # Changed to True since this is expected behavior, not an error
+        "message": "Commenting feature is unavailable due to LinkedIn API deprecation. Use manual commenting via the web UI instead.",
         "actions": [
-            "⚠️ LinkedIn arama API'si kullanımdan kaldırıldı",
-            "ℹ️ Manuel yorum yapmak için web arayüzünü kullanın",
+            "ℹ️ LinkedIn arama API'si LinkedIn tarafından kaldırıldı",
+            "✅ Manuel yorum özelliği web arayüzünde mevcut",
         ]
     }
 
@@ -177,8 +179,16 @@ async def trigger_invitation_async():
         }
 
     except Exception as e:
-        log_action("Invitation Failed", f"Unexpected error: {e}")
-        return {"success": False, "message": f"Error: {str(e)}"}
+        error_message = str(e)
+        
+        # Check if it's a 403 Forbidden error
+        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 403:
+            error_message = "LinkedIn invitations API requires special permissions. Please request 'invitations' permission in your LinkedIn Developer app. See LINKEDIN_API_MIGRATION.md for details."
+            log_action("Invitation Skipped", error_message)
+        else:
+            log_action("Invitation Failed", f"Error: {error_message}")
+        
+        return {"success": False, "message": error_message}
 
 async def trigger_invitation():
     return await trigger_invitation_async()

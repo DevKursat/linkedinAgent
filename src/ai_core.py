@@ -30,11 +30,11 @@ def generate_text(task_prompt: str) -> str:
         task_prompt: The specific instruction for the task (e.g., "Write a comment for this post...").
 
     Returns:
-        The generated text as a string.
+        The generated text as a string, or None if generation fails.
     """
     if not model:
-        print("❌ ERROR: Gemini model is not initialized. Cannot generate text.")
-        return "[AI functionality disabled. Please check GEMINI_API_KEY]"
+        print("⚠️ WARNING: Gemini model is not initialized. AI features are disabled.")
+        return None
 
     try:
         # Combine the main persona prompt with the specific task prompt
@@ -45,11 +45,15 @@ def generate_text(task_prompt: str) -> str:
 
         # Clean up the response text
         generated_text = response.text.strip()
+        
+        if not generated_text:
+            print("⚠️ WARNING: Generated text is empty.")
+            return None
 
         return generated_text
     except Exception as e:
-        print(f"An error occurred while generating text: {e}")
-        return "" # Return empty string on failure
+        print(f"⚠️ WARNING: AI content generation error: {e}")
+        return None  # Return None on failure to indicate error
 
 if __name__ == '__main__':
     # A simple test to verify the functionality
