@@ -51,6 +51,19 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Setup templates
 templates = Jinja2Templates(directory=templates_dir)
 
+# --- Add custom Jinja2 filter for timezone conversion ---
+import pytz
+
+def format_datetime_istanbul(dt: datetime.datetime):
+    """Converts a UTC datetime object to Istanbul time and formats it."""
+    if dt.tzinfo is None:
+        dt = pytz.utc.localize(dt)
+    istanbul_tz = pytz.timezone("Europe/Istanbul")
+    return dt.astimezone(istanbul_tz).strftime("%Y-%m-%d %H:%M:%S")
+
+templates.env.filters["istanbul_time"] = format_datetime_istanbul
+# --- End of custom filter ---
+
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from .database import SessionLocal
