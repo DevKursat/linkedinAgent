@@ -20,7 +20,7 @@ def main(email, password):
 
     try:
         # Attempt to login
-        api.client.authenticate()
+        api.client.authenticate(email, password)
 
     except ChallengeException:
         print("\n🔒 LinkedIn Security Challenge Detected.")
