@@ -45,6 +45,26 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 
 ### Setup
 
+#### Automated Setup (Easiest) ⚡
+
+**Windows:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+start_windows.bat
+```
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+./start.sh
+```
+
+These scripts check Docker, create .env, and start the application automatically.
+
+#### Manual Setup (Step by Step)
+
 1. **Clone the repository**
 ```bash
 git clone https://github.com/DevKursat/linkedinAgent.git

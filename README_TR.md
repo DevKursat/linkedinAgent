@@ -75,6 +75,26 @@
 
 ### 2. Minimum Adımlar
 
+#### Otomatik Başlatma (En Kolay Yol) ⚡
+
+**Windows:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+start_windows.bat
+```
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+./start.sh
+```
+
+Bu scriptler Docker'ı kontrol eder, .env dosyasını oluşturur ve uygulamayı başlatır.
+
+#### Manuel Başlatma (Adım Adım)
+
 ```bash
 # 1. Repository'yi klonla
 git clone https://github.com/DevKursat/linkedinAgent.git
@@ -90,7 +110,7 @@ python check_docker.py
 # 4. Başlat (Docker)
 docker compose up -d --build
 
-# 4. Tarayıcıda aç
+# 5. Tarayıcıda aç
 start http://localhost:5000
 ```
 
