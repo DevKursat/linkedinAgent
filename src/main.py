@@ -148,16 +148,8 @@ from fastapi import BackgroundTasks
 from .worker import trigger_post_creation, trigger_commenting, trigger_invitation
 
 @app.post("/api/trigger/post")
-async def trigger_post(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    # This is the final, most robust solution.
-    # The web server reads the token from the DB and passes it to the worker.
-    # This completely decouples the worker from the session management.
-    token_record = db.query(models.Token).order_by(models.Token.created_at.desc()).first()
-    if not token_record:
-        return {"message": "Error: Not logged in. Cannot trigger post creation."}
-
-    access_token = token_record.access_token
-    background_tasks.add_task(trigger_post_creation, access_token)
+async def trigger_post(background_tasks: BackgroundTasks):
+    background_tasks.add_task(trigger_post_creation)
     return {"message": "Post creation triggered successfully."}
 
 @app.post("/api/trigger/comment")

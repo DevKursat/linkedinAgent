@@ -9,15 +9,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create data directory
-RUN mkdir -p /app/data
+# Create data directory and ensure it's writable
+RUN mkdir -p /app/data && chmod -R 777 /app/data
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
-ENV PORT=5000
 
-# Expose port
+# Expose port for the web service
 EXPOSE 5000
 
-# Run gunicorn
-CMD gunicorn --bind 0.0.0.0:${PORT} --workers 1 --timeout 120 src.wsgi:application
+# The command to run the application will be specified in docker-compose.yml
+CMD ["python"]
