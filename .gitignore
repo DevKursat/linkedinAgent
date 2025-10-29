@@ -37,3 +37,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local credentials file - DO NOT COMMIT
+src/credentials.py

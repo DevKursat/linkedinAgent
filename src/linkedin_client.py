@@ -1,14 +1,12 @@
 # src/linkedin_client.py
 import os
-from dotenv import load_dotenv
 from linkedin_api import Linkedin
 from linkedin_api.client import ChallengeException
 import json
+# Import credentials directly from the secure file
+from . import credentials
 
 # --- Configuration ---
-load_dotenv()
-LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
-LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
 COOKIE_PATH = "linkedin_cookies.json"
 
 # --- Custom Exception ---
@@ -21,7 +19,7 @@ _linkedin_api_client = None
 def get_linkedin_api():
     """
     Authenticates with LinkedIn using session cookies if available, otherwise
-    falls back to username/password. Raises LinkedInAuthenticationError on failure.
+    falls back to the credentials in credentials.py.
     """
     global _linkedin_api_client
     if _linkedin_api_client:
@@ -30,22 +28,15 @@ def get_linkedin_api():
     try:
         print("Attempting to authenticate with LinkedIn...")
 
-        # Prioritize using saved session cookies for authentication
         if os.path.exists(COOKIE_PATH):
             print(f"Found session cookie file at '{COOKIE_PATH}'. Authenticating with cookies.")
             api = Linkedin("", "", cookies=COOKIE_PATH)
-
-        # Fallback to username/password if cookies are not available/valid
-        elif LINKEDIN_EMAIL and LINKEDIN_PASSWORD:
-            print("No valid cookie file found. Falling back to username/password authentication.")
-            api = Linkedin(LINKEDIN_EMAIL, LINKEDIN_PASSWORD, refresh_cookies=True)
-            # Manually save the cookies after a successful login
+        else:
+            print("No cookie file found. Authenticating with credentials from credentials.py.")
+            api = Linkedin(credentials.LINKEDIN_EMAIL, credentials.LINKEDIN_PASSWORD, refresh_cookies=True)
             with open(COOKIE_PATH, "w") as f:
                 json.dump(api.client.cookies.get_dict(), f)
             print(f"New session cookies saved to '{COOKIE_PATH}'.")
-
-        else:
-            raise LinkedInAuthenticationError("LinkedIn credentials (or a cookie file) not found.")
 
         print("✅ Successfully authenticated with LinkedIn.")
         _linkedin_api_client = api
@@ -65,5 +56,4 @@ def get_linkedin_api():
 
 def get_client():
     """A getter that ensures the client is initialized before use."""
-    # This architecture ensures we only try to authenticate once per session.
     return get_linkedin_api()

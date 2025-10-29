@@ -4,8 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from . import models
 from .database import engine
-from dotenv import load_dotenv
 import pytz
+# Import credentials directly from the secure file
+from . import credentials
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -104,27 +105,20 @@ import sys
 async def interactive_login():
     """
     Triggers the interactive login script, passing credentials directly
-    as command-line arguments for robustness.
+    from the credentials.py file for maximum robustness.
     """
     import subprocess
 
     log_action("Authentication", "Interactive login process initiated by user.")
-
-    load_dotenv()
-    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
-    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
-
-    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=500, detail="Missing LINKEDIN_EMAIL or LINKEDIN_PASSWORD in .env file.")
 
     print("\n" + "="*60)
     print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
     print("="*60 + "\n")
 
     try:
+        # Pass credentials from the imported credentials module
         subprocess.run(
-            [sys.executable, 'interactive_login.py', LINKEDIN_EMAIL, LINKEDIN_PASSWORD],
+            [sys.executable, 'interactive_login.py', credentials.LINKEDIN_EMAIL, credentials.LINKEDIN_PASSWORD],
             check=True
         )
         message = "Interactive login process completed successfully! Cookies saved."
