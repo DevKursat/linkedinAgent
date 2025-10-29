@@ -104,25 +104,42 @@
         // Trigger a manual action
         async function triggerAction(endpoint, skipReload = false) {
             const statusElement = document.getElementById('manual-action-status');
-            statusElement.textContent = 'İşlem başlatılıyor...';
-            statusElement.style.color = '#1877f2';
+            statusElement.innerHTML = '<p style="color: #1877f2;">İşlem başlatılıyor...</p>';
 
             try {
                 const response = await fetch(endpoint, { method: 'POST' });
                 const result = await response.json();
 
-                statusElement.textContent = result.message || 'İşlem başarıyla tetiklendi!';
-                statusElement.style.color = 'green';
+                if (result.success) {
+                    let html = `<div style="color: green; margin-top: 10px;">
+                        <p><strong>✅ ${result.message}</strong></p>`;
+                    
+                    if (result.url) {
+                        html += `<p>🔗 <a href="${result.url}" target="_blank" style="color: #0073b1; text-decoration: underline;">LinkedIn'de Görüntüle</a></p>`;
+                    }
+                    
+                    if (result.actions && result.actions.length > 0) {
+                        html += '<div style="margin-top: 10px; padding: 10px; background: #f0f8ff; border-left: 3px solid #0073b1;">';
+                        result.actions.forEach(action => {
+                            html += `<p style="margin: 5px 0;">${action}</p>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    html += '</div>';
+                    statusElement.innerHTML = html;
+                } else {
+                    statusElement.innerHTML = `<p style="color: red;">❌ ${result.message || 'İşlem başarısız oldu.'}</p>`;
+                }
 
                 // Refresh the activity feed after a short delay, unless skipped
-                if (!skipReload) {
-                    setTimeout(() => location.reload(), 1500);
+                if (!skipReload && result.success) {
+                    setTimeout(() => location.reload(), 3000);
                 }
 
             } catch (error) {
                 console.error(`Error triggering action ${endpoint}:`, error);
-                statusElement.textContent = 'İşlem sırasında bir hata oluştu.';
-                statusElement.style.color = 'red';
+                statusElement.innerHTML = '<p style="color: red;">❌ İşlem sırasında bir hata oluştu.</p>';
             }
         }
 

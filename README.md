@@ -7,8 +7,11 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 - **Daily Tech Posts**: Fetches from TechCrunch, Y Combinator, Indie Hackers, Product Hunt
 - **Persona**: Kürşat (21), Product Builder - direct, sharp, strategic, friendly
 - **Smart Commenting**: Auto-replies in commenter's language with appropriate tone
-- **Turkish Follow-ups**: Adds Turkish summary 66 seconds after each post
+- **Precise Timing**: Likes posts after 45 seconds, adds Turkish summary after 90 seconds
+- **Turkish Follow-ups**: Adds Turkish summary 90 seconds after each post (with source)
+- **Operating Hours**: Autonomous operation from 7 AM to 10 PM (Istanbul time)
 - **Proactive Queue**: Web UI to manage comments on others' posts
+- **Auto-Connect**: Sends connection invites to engaged users
 - **Personalized Voice**: Injects your about/style docs so it writes exactly like you
 - **Interest-aware Discovery**: Finds posts matching your INTERESTS for proactive engagement
 - **Content Moderation**: Blocks politics and speculative crypto, flags sensitive topics
@@ -102,7 +105,28 @@ docker compose restart worker
 - **Daily Post**: Random time in peak windows (09:30-11:00, 17:30-19:30 weekdays)
 - **Comment Polling**: Every 7 minutes
 - **Proactive Queue**: Every hour (max 9 posts/day)
-- **Follow-ups**: 66 seconds after main post
+- **Follow-ups**: 90 seconds after main post
+
+### Automation Features
+
+The agent runs **autonomously from 7 AM to 10 PM** (Istanbul time) and handles three main tasks:
+
+1. **Auto-post with Engagement Timeline**
+   - Finds and posts current tech news in English (matching your style)
+   - Automatically likes the post after **45 seconds**
+   - Adds Turkish summary with source after **90 seconds** total
+
+2. **Auto-comment on Popular Posts**
+   - Searches for posts from high-follower accounts
+   - Generates insightful comments in your style
+   - Posts comments to relevant discussions
+
+3. **Auto-connect Invitations**
+   - Identifies potential connections based on engagement
+   - Sends personalized connection requests
+   - Builds your network strategically
+
+All tasks respect the **7 AM - 10 PM operating hours** and will automatically skip execution outside this window.
 
 ## Configuration
 
@@ -114,6 +138,8 @@ All settings in `.env`:
 | `LINKEDIN_CLIENT_SECRET` | - | LinkedIn app client secret |
 | `GEMINI_API_KEY` | - | Google Gemini API key |
 | `DRY_RUN` | `true` | Test mode (no actual posting) |
+| `OPERATING_HOURS_START` | `7` | Start of operating hours (7 AM) |
+| `OPERATING_HOURS_END` | `22` | End of operating hours (10 PM) |
 | `DAILY_POSTS` | `1` | Posts per day |
 | `MAX_DAILY_PROACTIVE` | `9` | Max proactive comments/day |
 | `PERSONA_NAME` | `Kürşat` | Bot persona name |
