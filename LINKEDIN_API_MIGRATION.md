@@ -92,14 +92,16 @@ If you're already using linkedinAgent:
 - Adding reactions (likes)
 - Submitting comments on specific posts
 - Turkish summary follow-ups
-- Connection invitations
 - Manual commenting via web UI
+
+### ⚠️ Requires Special Permissions:
+- **Connection invitations** - Requires the "invitations" permission which must be requested from LinkedIn. Most apps won't have this permission. The feature will fail silently if not available.
 
 ### ⚠️ Currently Unavailable:
 - Automatic post search and discovery
 - Automated commenting on discovered posts
 
-The scheduler will skip the auto-commenting job and log a message instead of throwing errors.
+The scheduler will skip these features silently without generating error messages.
 
 ## Error Messages Explained
 
@@ -110,6 +112,13 @@ The scheduler will skip the auto-commenting job and log a message instead of thr
 ### 404 Not Found on `/v2/search`
 **Before Fix:** This error occurred when trying to search for posts.  
 **After Fix:** Search functionality is disabled gracefully. No errors, just skips the operation.
+
+### 403 Forbidden on Invitations API
+**Current Behavior:** If you see "LinkedIn invitations API requires special permissions" when manually triggering invitations, this is expected. Most LinkedIn apps don't have the "invitations" permission.  
+**Solution:** 
+- When scheduled: The feature now fails silently without logging errors
+- When manually triggered: You'll see the message only once per trigger
+- To enable: Request the "invitations" permission in your LinkedIn Developer app (rarely granted)
 
 ## API Version Compatibility
 

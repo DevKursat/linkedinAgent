@@ -125,10 +125,8 @@ async def trigger_post_creation():
 
 async def trigger_commenting_async():
     """Full logic for proactive commenting."""
-    log_action("Commenting Triggered", "Process initiated.")
-    
     # Note: LinkedIn search API is deprecated, commenting feature is currently unavailable
-    log_action("Commenting Skipped", "LinkedIn search endpoint has been deprecated by LinkedIn. Manual commenting via UI is still available.")
+    # Skip silently - no need to log this every time since it's a known limitation
     return {
         "success": True,  # Changed to True since this is expected behavior, not an error
         "message": "Commenting feature is unavailable due to LinkedIn API deprecation. Use manual commenting via the web UI instead.",
@@ -143,21 +141,19 @@ async def trigger_commenting():
 
 async def trigger_invitation_async():
     """Full logic for sending a connection invitation."""
-    log_action("Invitation Triggered", "Process initiated.")
     api_client = get_api_client()
     if not api_client: 
         return {"success": False, "message": "API client initialization failed"}
 
     profile_to_invite = find_profile_to_invite()
     if not profile_to_invite:
-        log_action("Invitation Failed", "Could not find a profile to invite.")
+        # Don't log - this is expected when no profiles are found
         return {"success": False, "message": "Could not find a profile to invite"}
 
     try:
         profile = await api_client.get_profile()
         user_urn = profile.get("id")
         if not user_urn:
-            log_action("Invitation Failed", "Could not get user URN.")
             return {"success": False, "message": "Could not get user profile"}
 
         invitee_urn = profile_to_invite["urn_id"]
@@ -181,11 +177,14 @@ async def trigger_invitation_async():
     except Exception as e:
         error_message = str(e)
         
-        # Check if it's a 403 Forbidden error
+        # Check if it's a 403 Forbidden error - this is expected without proper permissions
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 403:
+            # Don't log this error - it's a known limitation documented in LINKEDIN_API_MIGRATION.md
+            # Only return the message if manually triggered, scheduler will skip silently
             error_message = "LinkedIn invitations API requires special permissions. Please request 'invitations' permission in your LinkedIn Developer app. See LINKEDIN_API_MIGRATION.md for details."
-            log_action("Invitation Skipped", error_message)
+            return {"success": False, "message": error_message, "skip_log": True}
         else:
+            # Only log unexpected errors
             log_action("Invitation Failed", f"Error: {error_message}")
         
         return {"success": False, "message": error_message}
