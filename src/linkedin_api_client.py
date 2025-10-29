@@ -54,7 +54,16 @@ class LinkedInApiClient:
     # ... (rest of the methods remain unchanged) ...
 
     async def send_invitation(self, inviter_urn: str, invitee_urn: str, message: str = None) -> None:
-        """Sends a connection invitation to a given profile."""
+        """
+        Sends a connection invitation to a given profile.
+        
+        NOTE: This endpoint requires special permissions from LinkedIn.
+        If you receive a 403 Forbidden error, you need to request the 'invitations' 
+        permission in your LinkedIn Developer app settings.
+        
+        Raises:
+            httpx.HTTPStatusError: If the request fails with a 403, 404, or other HTTP error
+        """
         payload = {
             "invitee": f"urn:li:person:{invitee_urn}",
             "actor": f"urn:li:person:{inviter_urn}",
