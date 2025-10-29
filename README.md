@@ -112,7 +112,7 @@ All settings in `.env`:
 |----------|---------|-------------|
 | `LINKEDIN_CLIENT_ID` | - | LinkedIn app client ID |
 | `LINKEDIN_CLIENT_SECRET` | - | LinkedIn app client secret |
-| `GOOGLE_API_KEY` | - | Google Gemini API key |
+| `GEMINI_API_KEY` | - | Google Gemini API key |
 | `DRY_RUN` | `true` | Test mode (no actual posting) |
 | `DAILY_POSTS` | `1` | Posts per day |
 | `MAX_DAILY_PROACTIVE` | `9` | Max proactive comments/day |
@@ -131,13 +131,36 @@ All settings in `.env`:
 
 ### Local Python Setup
 
+1. **Set up virtual environment**
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # or `.venv\Scripts\activate` on Windows
 pip install -r requirements.txt
 ```
 
-Run components separately:
+2. **Configure environment**
+```bash
+cp .env.example .env
+```
+Now, edit the newly created `.env` file and fill in your credentials, particularly:
+- `LINKEDIN_CLIENT_ID`
+- `LINKEDIN_CLIENT_SECRET`
+- `GEMINI_API_KEY`
+
+**Important**: For local development without Docker, the application runs on port 8000. Ensure your `LINKEDIN_REDIRECT_URI` in the `.env` file is set to `http://127.0.0.1:8000/callback`.
+
+3. **Run the web server**
+```bash
+uvicorn src.main:app --reload
+```
+The application will be available at http://127.0.0.1:8000.
+
+4. **Run the worker (in a separate terminal)**
+```bash
+# Make sure to activate the virtual environment in the new terminal as well
+source .venv/bin/activate
+python -m src.worker
+```
 ```bash
 # Web UI
 python -m src.main
@@ -287,8 +310,9 @@ If you'd like, I can prepare the screenshots and the exact network console captu
 ## Troubleshooting
 
 **LinkedIn login fails**
-- Verify redirect URI matches exactly: `http://localhost:5000/callback`
-- Check client ID and secret are correct
+- **For Docker setup**: Verify redirect URI in your `.env` file matches `http://localhost:5000/callback`.
+- **For Local Python setup**: Verify redirect URI in your `.env` file matches `http://127.0.0.1:8000/callback`.
+- Check that your `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET` in `.env` are correct.
 - Ensure app has correct scopes: `w_member_social r_member_social r_liteprofile`
 
 **Worker not posting**
