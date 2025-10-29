@@ -41,11 +41,15 @@ class LinkedInApiClient:
             db.close()
 
     async def get_profile(self) -> Dict[str, Any]:
-        """Fetches the authenticated user's profile information."""
+        """Fetches the authenticated user's profile information using OpenID Connect userinfo endpoint."""
         async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.API_BASE_URL}/me", headers=self.headers)
+            response = await client.get(f"{self.API_BASE_URL}/userinfo", headers=self.headers)
             response.raise_for_status()
-            return response.json()
+            profile_data = response.json()
+            # Map 'sub' field to 'id' for backward compatibility
+            if 'sub' in profile_data and 'id' not in profile_data:
+                profile_data['id'] = profile_data['sub']
+            return profile_data
 
     # ... (rest of the methods remain unchanged) ...
 
@@ -66,12 +70,22 @@ class LinkedInApiClient:
             response.raise_for_status()
 
     async def search_for_posts(self, keywords: str, count: int = 5) -> List[Dict[str, Any]]:
-        """Searches for posts on LinkedIn based on keywords."""
-        params = {"q": "keywords", "keywords": keywords, "count": count, "sort": "recency"}
-        async with httpx.AsyncClient() as client:
-            response = await client.get(f"{self.API_BASE_URL}/search", headers=self.headers, params=params)
-            response.raise_for_status()
-            return response.json().get("elements", [])
+        """
+        Searches for posts on LinkedIn based on keywords.
+        
+        NOTE: This endpoint has been deprecated by LinkedIn and will return empty results.
+        The /v2/search endpoint with keywords parameter is no longer available for most apps.
+        This method is kept for backward compatibility but will return an empty list.
+        """
+        # LinkedIn has deprecated the search endpoint for most applications
+        # Returning empty list to prevent 404 errors
+        import logging
+        logging.warning(
+            "LinkedIn search endpoint is deprecated. "
+            "Search functionality is no longer available through the public API. "
+            "Consider using LinkedIn's official products like Sales Navigator or Recruiter for search needs."
+        )
+        return []
 
     async def share_post(self, author_urn: str, text: str) -> Dict[str, Any]:
         """Shares a text post to the authenticated user's feed."""
