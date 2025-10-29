@@ -257,13 +257,22 @@ def start_agent(venv_python):
     
     # Ortam değişkenlerini yükle (Load environment variables)
     env = os.environ.copy()
+    
+    # Hardcoded credentials - set these first with highest priority
+    env['LINKEDIN_CLIENT_ID'] = '86n8sb2f78chmu'
+    env['LINKEDIN_CLIENT_SECRET'] = 'WPL_AP1.UdjoaFLr3RMCcofU.8wJPWQ=='
+    env['GEMINI_API_KEY'] = 'AIzaSyC1OQmXcuHkGnuEzOIyraNpbkis61_DlEQ'
+    
+    # Load .env file if it exists (will be overridden by hardcoded values above)
     if Path(".env").exists():
         with open(".env", 'r') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#') and '=' in line:
                     key, value = line.split('=', 1)
-                    env[key.strip()] = value.strip()
+                    # Only set if not already set by hardcoded values
+                    if key.strip() not in ['LINKEDIN_CLIENT_ID', 'LINKEDIN_CLIENT_SECRET', 'GEMINI_API_KEY']:
+                        env[key.strip()] = value.strip()
     
     print_success("Sunucu başlatılıyor...")
     print()
@@ -271,6 +280,11 @@ def start_agent(venv_python):
     print(f"{BOLD}{GREEN}✅ AI AGENT BAŞARIYLA BAŞLATILDI!{RESET}")
     print(f"{BOLD}{GREEN}   (AI AGENT STARTED SUCCESSFULLY!){RESET}")
     print("="*70)
+    print()
+    print(f"{BOLD}🔑 Kimlik Bilgileri Yüklendi (Credentials Loaded):{RESET}")
+    print(f"   ✅ LINKEDIN_CLIENT_ID: {env.get('LINKEDIN_CLIENT_ID', 'NOT SET')[:20]}...")
+    print(f"   ✅ LINKEDIN_CLIENT_SECRET: {'SET' if env.get('LINKEDIN_CLIENT_SECRET') else 'NOT SET'}")
+    print(f"   ✅ GEMINI_API_KEY: {'SET' if env.get('GEMINI_API_KEY') else 'NOT SET'}")
     print()
     print(f"{BOLD}🌐 Web Arayüzü (Web Interface):{RESET}")
     print(f"   {BLUE}http://localhost:8000{RESET}")
