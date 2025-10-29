@@ -34,13 +34,9 @@ class Settings(BaseSettings):
     def coalesce_api_keys(cls, values: dict[str, Any]) -> dict[str, Any]:
         """
         Use GOOGLE_API_KEY as a fallback for GEMINI_API_KEY.
-        Ensure that at least one of them is provided.
         """
         if 'GEMINI_API_KEY' not in values and 'GOOGLE_API_KEY' in values:
             values['GEMINI_API_KEY'] = values['GOOGLE_API_KEY']
-
-        if not values.get('GEMINI_API_KEY'):
-            raise ValueError("GEMINI_API_KEY (or GOOGLE_API_KEY) must be set in the environment or .env file.")
 
         return values
 

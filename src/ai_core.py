@@ -1,14 +1,10 @@
 # src/ai_core.py
-import os
 import google.generativeai as genai
-from dotenv import load_dotenv
+from .config import settings
 from .persona import get_persona_prompt
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Configure the Gemini API
-api_key = os.getenv("GEMINI_API_KEY")
+# Configure the Gemini API using centralized config
+api_key = settings.GEMINI_API_KEY
 model = None
 if not api_key:
     print("⚠️ WARNING: GEMINI_API_KEY not found in .env file. AI features will be disabled.")
