@@ -3,7 +3,7 @@ import sys
 import json
 import argparse
 from linkedin_api import Linkedin
-from linkedin_api.client import ChallengeException, AuthenticationException
+from linkedin_api.client import ChallengeException
 
 COOKIE_PATH = "linkedin_cookies.json"
 
@@ -32,13 +32,10 @@ def main(email, password):
             print(f"\n❌ ERROR: Failed to answer the challenge. Details: {e}")
             sys.exit(1)
 
-    except AuthenticationException as e:
-        print(f"\n❌ ERROR: Authentication failed. Please check your email and password.")
-        print(f"   Details: {e}")
-        sys.exit(1)
-
     except Exception as e:
-        print(f"\n❌ ERROR: An unexpected error occurred during login: {e}")
+        # A general exception will catch authentication errors if credentials are wrong
+        print(f"\n❌ ERROR: An unexpected error occurred. This could be due to wrong credentials or a network issue.")
+        print(f"   Details: {e}")
         sys.exit(1)
 
     # If authentication is successful (either directly or via challenge)
