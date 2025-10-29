@@ -64,7 +64,7 @@ async def test_post_creation_ai_failure(mock_generate, mock_article, mock_client
 @patch("src.worker.log_action")
 @patch("src.worker.get_api_client")
 async def test_invitation_403_error(mock_get_client, mock_log):
-    """Test that invitation handles 403 Forbidden error gracefully."""
+    """Test that invitation handles 403 Forbidden error gracefully without logging."""
     from src.worker import trigger_invitation_async
     import httpx
     
@@ -90,6 +90,10 @@ async def test_invitation_403_error(mock_get_client, mock_log):
     assert result["success"] is False
     assert "special permissions" in result["message"]
     assert "invitations" in result["message"]
+    assert result.get("skip_log") is True  # Should have skip_log flag
+    
+    # Verify log_action was NOT called for 403 errors (silent failure)
+    mock_log.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -104,3 +108,6 @@ async def test_commenting_returns_success(mock_log):
     assert result["success"] is True
     assert "deprecated" in result["message"].lower() or "unavailable" in result["message"].lower()
     assert len(result["actions"]) > 0
+    
+    # Verify log_action was NOT called (silent skip)
+    mock_log.assert_not_called()
