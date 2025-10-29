@@ -5,6 +5,7 @@ from fastapi.templating import Jinja2Templates
 from . import models
 from .database import engine
 from dotenv import load_dotenv
+import pytz
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -52,9 +53,6 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 # Setup templates
 templates = Jinja2Templates(directory=templates_dir)
 
-# --- Add custom Jinja2 filter for timezone conversion ---
-import pytz
-
 def format_datetime_istanbul(dt: datetime.datetime):
     """Converts a UTC datetime object to Istanbul time and formats it."""
     if dt.tzinfo is None:
@@ -63,7 +61,6 @@ def format_datetime_istanbul(dt: datetime.datetime):
     return dt.astimezone(istanbul_tz).strftime("%Y-%m-%d %H:%M:%S")
 
 templates.env.filters["istanbul_time"] = format_datetime_istanbul
-# --- End of custom filter ---
 
 from sqlalchemy.orm import Session
 from fastapi import Depends
@@ -113,7 +110,6 @@ async def interactive_login():
 
     log_action("Authentication", "Interactive login process initiated by user.")
 
-    # --- Load credentials directly from .env to pass as arguments ---
     load_dotenv()
     LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
     LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
@@ -121,14 +117,12 @@ async def interactive_login():
     if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="Missing LINKEDIN_EMAIL or LINKEDIN_PASSWORD in .env file.")
-    # --- End of loading ---
 
     print("\n" + "="*60)
     print("🚀 INTERACTIVE LOGIN STARTED: Please follow the prompts below.")
     print("="*60 + "\n")
 
     try:
-        # Pass credentials as direct command-line arguments
         subprocess.run(
             [sys.executable, 'interactive_login.py', LINKEDIN_EMAIL, LINKEDIN_PASSWORD],
             check=True
