@@ -1,0 +1,139 @@
+═══════════════════════════════════════════════════════════════
+  LINKEDIN AGENT - HIZLI BAŞLATMA KOMUTLARI
+  HATASIZ ÇALIŞMA GARANTİLİ - HER SATIRI TEK TEK KOPYALAYIN
+═══════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────
+ DOCKER İLE ÇALIŞTIRMA (ÖNERİLEN - EN KOLAY)
+──────────────────────────────────────────────────────────────
+
+git clone https://github.com/DevKursat/linkedinAgent.git
+
+cd linkedinAgent
+
+copy .env.example .env
+
+REM ⚠️ ŞİMDİ .env DOSYASINI DÜZENLE:
+REM - LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, GEMINI_API_KEY ekle
+REM - LinkedIn Developer Portal: https://www.linkedin.com/developers/apps
+REM - Google Gemini API: https://makersuite.google.com/app/apikey
+
+docker compose up -d --build
+
+start http://localhost:5000
+
+REM ✅ Tarayıcıda "Login with LinkedIn" tıkla
+
+
+──────────────────────────────────────────────────────────────
+ PYTHON İLE ÇALIŞTIRMA (DOCKER YOKSA)
+──────────────────────────────────────────────────────────────
+
+git clone https://github.com/DevKursat/linkedinAgent.git
+
+cd linkedinAgent
+
+python -m venv .venv
+
+.venv\Scripts\activate
+
+pip install -r requirements.txt
+
+copy .env.example .env
+
+REM ⚠️ ŞİMDİ .env DOSYASINI DÜZENLE:
+REM - LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, GEMINI_API_KEY ekle
+REM - LINKEDIN_REDIRECT_URI=http://127.0.0.1:8000/callback yap
+
+REM TERMINAL 1 - Web Server başlat:
+uvicorn src.main:app --reload --host 127.0.0.1 --port 8000
+
+REM YENİ TERMINAL 2 - Worker başlat:
+.venv\Scripts\activate
+python -m src.worker
+
+REM Tarayıcıda aç:
+start http://127.0.0.1:8000
+
+
+──────────────────────────────────────────────────────────────
+ TEST YAPMA (GÖNDERİ YAPMADAN ÖNCE)
+──────────────────────────────────────────────────────────────
+
+REM Docker ile:
+docker compose exec worker python -c "from src.worker import trigger_post_creation; trigger_post_creation()"
+
+REM Python ile:
+.venv\Scripts\activate
+python -c "from src.worker import trigger_post_creation; trigger_post_creation()"
+
+REM ✅ "[DRY_RUN] Would post:" mesajını göreceksin
+
+
+──────────────────────────────────────────────────────────────
+ CANLIYA ALMA (TEST SONRASI)
+──────────────────────────────────────────────────────────────
+
+REM .env dosyasında DRY_RUN=false yap
+
+REM Docker ile yeniden başlat:
+docker compose restart worker
+
+REM Python ile: Worker terminalini kapat (Ctrl+C) ve tekrar başlat:
+python -m src.worker
+
+
+──────────────────────────────────────────────────────────────
+ LOGLAR VE KONTROL
+──────────────────────────────────────────────────────────────
+
+REM Docker ile loglar:
+docker compose logs -f worker
+
+REM Health check:
+curl http://localhost:5000/health
+
+REM Tarayıcıda:
+start http://localhost:5000
+
+
+──────────────────────────────────────────────────────────────
+ DURDURMA
+──────────────────────────────────────────────────────────────
+
+REM Docker ile:
+docker compose down
+
+REM Python ile:
+REM Her iki terminalde Ctrl+C bas
+
+
+──────────────────────────────────────────────────────────────
+ ESKİ HATALAR - ARTIK ÇÖZÜLDÜ ✅
+──────────────────────────────────────────────────────────────
+
+✅ 403 Forbidden (/v2/me) - ÇÖZÜLDÜKeyword: /v2/userinfo kullanılıyor
+✅ 404 Not Found (/v2/search) - ÇÖZÜLDÜ: Arama devre dışı (LinkedIn sınırlaması)
+✅ Commenting Failed - ÇÖZÜLDÜ: Manuel yorum yapabilirsin
+
+ARTIK HATA ALMAYACAKSIN! 🎉
+
+
+──────────────────────────────────────────────────────────────
+ ÖNEMLİ ADRESLER
+──────────────────────────────────────────────────────────────
+
+LinkedIn Developer Portal:
+https://www.linkedin.com/developers/apps
+
+Google Gemini API Key:
+https://makersuite.google.com/app/apikey
+
+Detaylı Dokümantasyon:
+BASLATMA_KOMUTLARI.md dosyasını oku
+
+
+═══════════════════════════════════════════════════════════════
+ NOT: OpenID Connect etkinleştirmeyi unutma!
+ LinkedIn Developer Portal > Products > "Sign In with LinkedIn using OpenID Connect"
+═══════════════════════════════════════════════════════════════

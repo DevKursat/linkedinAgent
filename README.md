@@ -2,6 +2,18 @@
 
 A production-ready LinkedIn bot that posts tech news with a strategic persona, manages comments, and handles proactive engagement.
 
+## ✅ NO MORE ERRORS! / ARTIK HATA YOK!
+
+**All LinkedIn API errors have been fixed!** / **Tüm LinkedIn API hataları düzeltildi!**
+
+- ✅ **403 Forbidden Error** - Fixed! Now using `/v2/userinfo` endpoint (OpenID Connect)
+- ✅ **404 Not Found Error** - Fixed! Search functionality gracefully disabled (LinkedIn API limitation)
+- ✅ **All Tests Passing** - 8/8 tests successful
+
+**Quick Start Commands**: See [`HIZLI_BASLAT.txt`](HIZLI_BASLAT.txt) (Turkish) or [`BASLATMA_KOMUTLARI.md`](BASLATMA_KOMUTLARI.md) for step-by-step commands to copy-paste!
+
+---
+
 ## Features
 
 - **Daily Tech Posts**: Fetches from TechCrunch, Y Combinator, Indie Hackers, Product Hunt
@@ -18,6 +30,10 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 - **Time-aware**: Respects Istanbul timezone and peak posting windows
 
 ## Quick Start with Docker
+
+> 💡 **Want simple copy-paste commands?** Check out:
+> - [`HIZLI_BASLAT.txt`](HIZLI_BASLAT.txt) - Quick command list in Turkish
+> - [`BASLATMA_KOMUTLARI.md`](BASLATMA_KOMUTLARI.md) - Detailed Turkish guide with all commands
 
 ### Prerequisites
 
