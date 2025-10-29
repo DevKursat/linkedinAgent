@@ -6,6 +6,7 @@ from . import models
 from .database import engine
 import pytz
 from dotenv import load_dotenv
+import os
 
 # --- Robust Credential Loading ---
 try:
@@ -49,7 +50,6 @@ async def startup_event():
 async def shutdown_event():
     shutdown_scheduler()
 
-import os
 from starlette.staticfiles import StaticFiles
 
 # Determine the absolute path to the project root's "static" and "templates" directory
