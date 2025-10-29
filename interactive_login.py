@@ -1,54 +1,57 @@
 # interactive_login.py
-import os
 import sys
 import json
-from dotenv import load_dotenv
+import argparse
 from linkedin_api import Linkedin
-from linkedin_api.client import ChallengeException
+from linkedin_api.client import ChallengeException, AuthenticationException
 
-# Define constants at the module level
 COOKIE_PATH = "linkedin_cookies.json"
 
-def main():
+def main(email, password):
     """
-    Performs an interactive login to LinkedIn. It loads credentials at runtime,
-    prompts for challenges, and saves session cookies.
+    Performs a robust interactive login. If a security challenge is raised,
+    it prompts the user to enter the PIN from the terminal.
     """
-    # --- Load environment variables inside main() ---
-    # This ensures that the script finds the .env file correctly
-    # even when called as a subprocess from a different working directory.
-    load_dotenv()
-    LINKEDIN_EMAIL = os.getenv("LINKEDIN_EMAIL")
-    LINKEDIN_PASSWORD = os.getenv("LINKEDIN_PASSWORD")
-    # --- End of loading ---
-
-    if not LINKEDIN_EMAIL or not LINKEDIN_PASSWORD:
-        print("❌ ERROR: Please ensure LINKEDIN_EMAIL and LINKEDIN_PASSWORD are set in your .env file.")
-        sys.exit(1)
-
     print("🚀 Attempting to authenticate with LinkedIn...")
     print("If a security challenge (like a PIN) is required, you will be prompted to enter it below.")
 
+    # Instantiate the client without authenticating
+    api = Linkedin(email, password, refresh_cookies=True, authenticate=False)
+
     try:
-        api = Linkedin(
-            LINKEDIN_EMAIL,
-            LINKEDIN_PASSWORD,
-            refresh_cookies=True,
-        )
+        # Attempt to login
+        api.client.authenticate()
 
-        with open(COOKIE_PATH, "w") as f:
-            json.dump(api.client.cookies.get_dict(), f)
+    except ChallengeException:
+        print("\n🔒 LinkedIn Security Challenge Detected.")
+        pin = input("Please enter the PIN sent to your device: ")
+        try:
+            # Submit the PIN to resolve the challenge
+            api.client.answer_challenge(pin)
+        except Exception as e:
+            print(f"\n❌ ERROR: Failed to answer the challenge. Details: {e}")
+            sys.exit(1)
 
-        print(f"\n✅ Login successful! Session cookies have been saved to '{COOKIE_PATH}'.")
-        print("You can now restart the main application if it's running.")
-
-    except ChallengeException as e:
-        print(f"\n❌ ERROR: Login failed due to a security challenge that could not be resolved.")
+    except AuthenticationException as e:
+        print(f"\n❌ ERROR: Authentication failed. Please check your email and password.")
         print(f"   Details: {e}")
         sys.exit(1)
+
     except Exception as e:
         print(f"\n❌ ERROR: An unexpected error occurred during login: {e}")
         sys.exit(1)
 
+    # If authentication is successful (either directly or via challenge)
+    print("\n✅ Authentication successful!")
+    with open(COOKIE_PATH, "w") as f:
+        json.dump(api.client.cookies.get_dict(), f)
+    print(f"   Session cookies have been saved to '{COOKIE_PATH}'.")
+
+
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Perform an interactive LinkedIn login.")
+    parser.add_argument("email", help="LinkedIn email address")
+    parser.add_argument("password", help="LinkedIn password")
+    args = parser.parse_args()
+
+    main(args.email, args.password)
