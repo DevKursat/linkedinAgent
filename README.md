@@ -109,17 +109,17 @@ docker compose restart worker
 
 ### Automation Features
 
-The agent runs **autonomously from 7 AM to 10 PM** (Istanbul time) and handles three main tasks:
+The agent runs **autonomously from 7 AM to 10 PM** (Istanbul time) and handles the following tasks:
 
 1. **Auto-post with Engagement Timeline**
    - Finds and posts current tech news in English (matching your style)
    - Automatically likes the post after **45 seconds**
    - Adds Turkish summary with source after **90 seconds** total
 
-2. **Auto-comment on Popular Posts**
-   - Searches for posts from high-follower accounts
-   - Generates insightful comments in your style
-   - Posts comments to relevant discussions
+2. **Auto-comment on Popular Posts** ⚠️ **Currently Unavailable**
+   - ⚠️ LinkedIn has deprecated the public search API endpoint
+   - Manual commenting via the web UI is still available
+   - Use the `/manual_comment` endpoint or dashboard to comment on specific posts
 
 3. **Auto-connect Invitations**
    - Identifies potential connections based on engagement
@@ -339,7 +339,17 @@ If you'd like, I can prepare the screenshots and the exact network console captu
 - **For Docker setup**: Verify redirect URI in your `.env` file matches `http://localhost:5000/callback`.
 - **For Local Python setup**: Verify redirect URI in your `.env` file matches `http://127.0.0.1:8000/callback`.
 - Check that your `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET` in `.env` are correct.
-- Ensure app has correct scopes: `w_member_social r_member_social r_liteprofile`
+- Ensure app has correct scopes: `openid profile w_member_social` (new OpenID Connect scopes)
+
+**LinkedIn API 403 Forbidden errors**
+- LinkedIn has migrated to OpenID Connect. This version uses `/v2/userinfo` instead of the deprecated `/v2/me` endpoint
+- Make sure your LinkedIn app has "Sign In with LinkedIn using OpenID Connect" product enabled
+- Required scopes: `openid`, `profile`, `w_member_social`
+
+**LinkedIn API 404 Not Found errors on search**
+- LinkedIn has deprecated the public search API endpoint (`/v2/search`)
+- The automated commenting feature that relied on search is currently unavailable
+- Use manual commenting via the web UI dashboard instead
 
 **Worker not posting**
 - Check `DRY_RUN` setting
