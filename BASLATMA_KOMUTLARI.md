@@ -28,6 +28,18 @@ copy .env.example .env
 - `GEMINI_API_KEY` - Google AI Studio'dan alın
 - `DRY_RUN=true` olarak bırakın (test modu)
 
+**Docker Kontrolü (Önerilir - Özellikle Windows için):**
+
+Docker'ın çalıştığından emin olun:
+
+```bash
+python check_docker.py
+```
+
+Bu script Docker'ın düzgün çalıştığını kontrol eder. Herhangi bir hata görürseniz, aşağıdaki belgelere bakın:
+- **Windows kullanıcıları**: [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md) - Docker Access Denied hatası için
+- **Tüm platformlar**: Devam etmeden önce tüm kontrollerin geçtiğinden emin olun
+
 ```bash
 docker compose up -d --build
 ```
@@ -256,12 +268,30 @@ Ctrl+C
 
 ## 📞 YARDIM
 
-Hata alırsanız:
+### Docker "Access Denied" veya "Cannot connect" Hatası (Windows)
+
+Eğer bu hatayı alıyorsanız:
+```
+unable to get image 'linkedinagent-worker': error during connect: 
+Get "http://%2F%2F.%2Fpipe%2FdockerDesktopLinuxEngine/...": 
+open //./pipe/dockerDesktopLinuxEngine: Access is denied.
+```
+
+**ÇÖZÜM**: [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md) dosyasını okuyun - Adım adım çözüm içerir!
+
+Kısa çözüm:
+1. Docker Desktop'ı **yönetici olarak** çalıştırın
+2. Docker'ın tamamen başlamasını bekleyin (yeşil simge)
+3. `python check_docker.py` ile kontrol edin
+4. `docker compose up -d --build` komutunu tekrar çalıştırın
+
+### Diğer Hatalar
 
 1. `.env` dosyanızı kontrol edin
 2. LinkedIn Developer Portal'da "OpenID Connect" etkin mi kontrol edin
 3. Redirect URI'ları doğru mu kontrol edin
 4. Logları kontrol edin: `docker compose logs worker` veya terminaldeki çıktıları okuyun
+5. Pre-flight check çalıştırın: `python check_docker.py`
 
 ---
 

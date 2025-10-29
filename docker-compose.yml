@@ -1,6 +1,9 @@
+version: '3.8'
+
 services:
   worker:
     build: .
+    container_name: linkedinagent-worker
     command: ["python", "-m", "src.worker"]
     env_file:
       - .env
@@ -10,6 +13,7 @@ services:
 
   web:
     build: .
+    container_name: linkedinagent-web
     command: gunicorn -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:5000 src.main:app
     ports:
       - "5000:5000"
@@ -17,4 +21,6 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+    depends_on:
+      - worker
     restart: unless-stopped

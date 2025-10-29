@@ -10,6 +10,8 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 - ✅ **404 Not Found Error** - Fixed! Search functionality gracefully disabled (LinkedIn API limitation)
 - ✅ **All Tests Passing** - 8/8 tests successful
 
+> 🪟 **Windows Users**: Getting Docker "Access Denied" error? See [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md) for detailed solutions!
+
 **Quick Start Commands**: See [`HIZLI_BASLAT.txt`](HIZLI_BASLAT.txt) (Turkish) or [`BASLATMA_KOMUTLARI.md`](BASLATMA_KOMUTLARI.md) for step-by-step commands to copy-paste!
 
 ---
@@ -43,6 +45,26 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 
 ### Setup
 
+#### Automated Setup (Easiest) ⚡
+
+**Windows:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+start_windows.bat
+```
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+./start.sh
+```
+
+These scripts check Docker, create .env, and start the application automatically.
+
+#### Manual Setup (Step by Step)
+
 1. **Clone the repository**
 ```bash
 git clone https://github.com/DevKursat/linkedinAgent.git
@@ -64,16 +86,23 @@ Edit `.env` and fill in your credentials:
 
 **Important**: Ensure `DRY_RUN=true` for initial testing!
 
-3. **Build and run**
+3. **Pre-flight check (recommended, especially on Windows)**
+```bash
+python check_docker.py
+```
+
+This script checks if Docker is properly configured before building. If you see any errors, fix them before proceeding.
+
+4. **Build and run**
 ```bash
 docker compose up -d --build
 ```
 
-4. **Authenticate with LinkedIn**
+5. **Authenticate with LinkedIn**
 
 Open http://localhost:5000 in your browser and click "Login with LinkedIn"
 
-5. **Test in DRY_RUN mode**
+6. **Test in DRY_RUN mode**
 ```bash
 docker compose exec worker python -c "from src.scheduler import run_daily_post; run_daily_post()"
 ```
@@ -350,6 +379,22 @@ Then restart containers. Note: if LinkedIn has not granted invitations.CREATE to
 If you'd like, I can prepare the screenshots and the exact network console captures for you and add them to `docs/`.
 
 ## Troubleshooting
+
+**Docker "Access Denied" error (Windows)**
+
+If you see this error:
+```
+unable to get image 'linkedinagent-worker': error during connect: 
+open //./pipe/dockerDesktopLinuxEngine: Access is denied.
+```
+
+This means Docker Desktop is not running or lacks permissions. **Solution**:
+1. Start Docker Desktop as Administrator (Right-click → Run as administrator)
+2. Wait for Docker to fully start (green icon in system tray)
+3. Run `python check_docker.py` to verify Docker is working
+4. Try `docker compose up -d --build` again
+
+📖 **Detailed guide**: See [WINDOWS_DOCKER_COZUM.md](WINDOWS_DOCKER_COZUM.md) for comprehensive Windows Docker troubleshooting.
 
 **LinkedIn login fails**
 - **For Docker setup**: Verify redirect URI in your `.env` file matches `http://localhost:5000/callback`.
