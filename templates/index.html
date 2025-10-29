@@ -60,7 +60,7 @@
                                 <a href="{{ log.result_url }}" target="_blank" class="verify-link">(Sonucu Gör)</a>
                             {% endif %}
                         </p>
-                        <p><strong>Zaman:</strong> {{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                        <p><strong>Zaman:</strong> {{ log.timestamp | istanbul_time }}</p>
                     </div>
                     {% endfor %}
                 {% else %}
