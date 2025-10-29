@@ -43,6 +43,23 @@
                 <p id="manual-action-status"></p>
             </section>
 
+            <section id="manual-comment-section">
+                <h2>Manuel Yorum Yap (LinkedIn Post URL ile)</h2>
+                <p style="color: #666; font-size: 0.9em;">
+                    ℹ️ LinkedIn arama API'si kaldırıldığı için, belirli bir gönderiye yorum yapmak için post URL'sini kullanın.
+                </p>
+                <div style="margin-top: 15px;">
+                    <input type="text" id="post-url-input" placeholder="LinkedIn post URL'sini buraya yapıştırın..." 
+                           style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <textarea id="custom-comment-input" placeholder="İsteğe bağlı: Özel yorum metni (boş bırakırsanız AI oluşturur)" 
+                              style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; min-height: 80px;"></textarea>
+                    <button onclick="submitManualComment()" style="padding: 10px 20px; background: #0073b1; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Yorum Gönder
+                    </button>
+                </div>
+                <p id="manual-comment-status" style="margin-top: 10px;"></p>
+            </section>
+
             <section id="auth-controls">
                 <h2>Kimlik Doğrulama</h2>
                 {% if is_logged_in %}
@@ -140,6 +157,68 @@
             } catch (error) {
                 console.error(`Error triggering action ${endpoint}:`, error);
                 statusElement.innerHTML = '<p style="color: red;">❌ İşlem sırasında bir hata oluştu.</p>';
+            }
+        }
+
+        // Submit manual comment
+        async function submitManualComment() {
+            const postUrl = document.getElementById('post-url-input').value.trim();
+            const customComment = document.getElementById('custom-comment-input').value.trim();
+            const statusElement = document.getElementById('manual-comment-status');
+
+            if (!postUrl) {
+                statusElement.innerHTML = '<p style="color: red;">❌ Lütfen LinkedIn post URL\'sini girin.</p>';
+                return;
+            }
+
+            statusElement.innerHTML = '<p style="color: #1877f2;">Yorum gönderiliyor...</p>';
+
+            try {
+                const response = await fetch('/api/manual_comment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        post_url: postUrl,
+                        comment: customComment
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    let html = `<div style="color: green; margin-top: 10px;">
+                        <p><strong>✅ ${result.message}</strong></p>`;
+                    
+                    if (result.url) {
+                        html += `<p>🔗 <a href="${result.url}" target="_blank" style="color: #0073b1; text-decoration: underline;">LinkedIn'de Görüntüle</a></p>`;
+                    }
+                    
+                    if (result.actions && result.actions.length > 0) {
+                        html += '<div style="margin-top: 10px; padding: 10px; background: #f0f8ff; border-left: 3px solid #0073b1;">';
+                        result.actions.forEach(action => {
+                            html += `<p style="margin: 5px 0;">${action}</p>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    html += '</div>';
+                    statusElement.innerHTML = html;
+
+                    // Clear inputs
+                    document.getElementById('post-url-input').value = '';
+                    document.getElementById('custom-comment-input').value = '';
+
+                    // Refresh the activity feed after a short delay
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    statusElement.innerHTML = `<p style="color: red;">❌ ${result.message || 'Yorum gönderilemedi.'}</p>`;
+                }
+
+            } catch (error) {
+                console.error('Error submitting manual comment:', error);
+                statusElement.innerHTML = '<p style="color: red;">❌ Yorum gönderilirken bir hata oluştu.</p>';
             }
         }
 

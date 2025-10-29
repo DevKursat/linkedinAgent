@@ -41,8 +41,20 @@ GET https://api.linkedin.com/v2/search?q=keywords&keywords=...
 - The `search_for_posts()` method now returns an empty list with a warning
 - Manual commenting via the web UI is still available
 
-**Workaround:**
-Use manual commenting through the dashboard at `http://localhost:5000/manual_comment` or `/queue` endpoints.
+**✅ Solution Implemented:**
+We've added a **Manual Comment Interface** to the dashboard that allows you to:
+1. Paste a LinkedIn post URL
+2. Optionally provide custom comment text (or let AI generate it)
+3. Submit the comment directly to that specific post
+
+**How to Use:**
+1. Navigate to the dashboard at `http://localhost:5000/`
+2. Find the "Manuel Yorum Yap" section
+3. Paste the LinkedIn post URL (e.g., `https://www.linkedin.com/feed/update/urn:li:activity:1234567890/`)
+4. Either write your own comment or leave blank for AI-generated comment
+5. Click "Yorum Gönder" to submit
+
+This workaround bypasses the need for search functionality - you simply comment on posts you've already found.
 
 ## What You Need to Do
 

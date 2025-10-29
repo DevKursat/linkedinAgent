@@ -161,10 +161,12 @@ The agent runs **autonomously from 7 AM to 10 PM** (Istanbul time) and handles t
    - Automatically likes the post after **45 seconds**
    - Adds Turkish summary with source after **90 seconds** total
 
-2. **Auto-comment on Popular Posts** ⚠️ **Currently Unavailable**
-   - ⚠️ LinkedIn has deprecated the public search API endpoint
-   - Manual commenting via the web UI is still available
-   - Use the `/manual_comment` endpoint or dashboard to comment on specific posts
+2. **Auto-comment on Popular Posts** ⚠️ **Automated Search Unavailable**
+   - ⚠️ LinkedIn has deprecated the public search API endpoint for automated discovery
+   - ✅ **NEW: Manual Comment Interface** - Use the dashboard to comment on specific posts
+   - Paste any LinkedIn post URL into the manual comment form
+   - Choose between AI-generated or custom comment text
+   - Full commenting functionality works - only automated post discovery is unavailable
 
 3. **Auto-connect Invitations**
    - Identifies potential connections based on engagement
