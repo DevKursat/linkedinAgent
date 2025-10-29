@@ -54,7 +54,7 @@ Windows users were getting this error when running `docker compose up -d --build
 **Özellikler / Features:**
 - ✅ Docker kurulum kontrolü
 - ✅ Docker daemon çalışma kontrolü
-- ✅ Docker Compose kontrol ü
+- ✅ Docker Compose kontrolü
 - ✅ .env dosyası kontrolü
 - ✅ Port 5000 müsaitlik kontrolü
 - ✅ Detaylı hata mesajları
