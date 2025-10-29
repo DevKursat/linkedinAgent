@@ -84,7 +84,7 @@ print("  ✓ Verified: All safe wrappers exist")
 
 # API Configuration
 print("\n✓ API CONFIGURATION")
-print(f"  ├─ LinkedIn Client ID: {settings.LINKEDIN_CLIENT_ID[:10]}... (configured)")
+print(f"  ├─ LinkedIn Client ID: {'*' * 20} (configured)")
 print(f"  ├─ LinkedIn Client Secret: {'*' * 20} (configured)")
 print(f"  └─ Google Gemini API Key: {'*' * 20} (configured)")
 
