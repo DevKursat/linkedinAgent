@@ -15,11 +15,12 @@ class LinkedInApiClient:
         # Prioritize the token passed directly to the constructor.
         # This is crucial for the worker flow.
         if access_token:
-            self.access_token = access_token
+            self.access_token = access_token.strip() if access_token else None
         else:
             # Fallback to loading from DB for other potential use cases.
             self.access_token = self._load_token_from_db()
 
+        # Validate that the token is not None or empty (already stripped above or in _load_token_from_db)
         if not self.access_token:
             raise ValueError("Access token is not available. Please log in or provide a token.")
 
@@ -34,8 +35,10 @@ class LinkedInApiClient:
         db = SessionLocal()
         try:
             token_record = db.query(Token).order_by(Token.created_at.desc()).first()
-            if token_record:
-                return token_record.access_token
+            if token_record and token_record.access_token:
+                # Strip whitespace and validate token is not empty
+                token = token_record.access_token.strip() if token_record.access_token else None
+                return token if token else None
             return None
         finally:
             db.close()

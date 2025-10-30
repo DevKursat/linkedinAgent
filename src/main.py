@@ -66,13 +66,15 @@ async def linkedin_callback(code: str, state: str, db: Session = Depends(get_db)
     token_data = response.json()
     access_token = token_data.get("access_token")
 
-    if not access_token:
+    # Validate token is not None, empty, or whitespace-only
+    if not access_token or not access_token.strip():
         return HTMLResponse("<h1>Error</h1><p>Access token not found in response.</p>", status_code=400)
 
     try:
         # Clear any old tokens and save the new one
+        # Strip whitespace from token before storing
         db.query(models.Token).delete()
-        new_token = models.Token(access_token=access_token)
+        new_token = models.Token(access_token=access_token.strip())
         db.add(new_token)
         db.commit()
         print("Access token successfully saved to the database.")
