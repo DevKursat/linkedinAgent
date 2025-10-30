@@ -220,6 +220,7 @@ All settings in `.env`:
 | `LINKEDIN_CLIENT_ID` | - | LinkedIn app client ID |
 | `LINKEDIN_CLIENT_SECRET` | - | LinkedIn app client secret |
 | `GEMINI_API_KEY` | - | Google Gemini API key |
+| `GEMINI_MODEL` | `gemini-1.5-flash` | Google Gemini model name (e.g., `gemini-1.5-flash`, `gemini-2.5-flash`) |
 | `DRY_RUN` | `true` | Test mode (no actual posting) |
 | `OPERATING_HOURS_START` | `7` | Start of operating hours (7 AM) |
 | `OPERATING_HOURS_END` | `22` | End of operating hours (10 PM) |
