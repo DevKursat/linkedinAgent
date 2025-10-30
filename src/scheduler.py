@@ -1,7 +1,8 @@
 # src/scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime
+from apscheduler.triggers.interval import IntervalTrigger
+from datetime import datetime, time
 import pytz
 from .config import settings
 from .worker import (
@@ -79,16 +80,14 @@ def setup_scheduler():
             misfire_grace_time=900
         )
 
-        # 3. Invitation Sending Job: Runs multiple times a day to spread out invitations.
+        # 3. Invitation Sending Job: Runs every 25 minutes during operating hours (9 AM - 10 PM)
+        # This allows approximately 31 invitations per day during active hours
+        # Using interval trigger with time window check in the worker function
         scheduler.add_job(
             safe_trigger_invitation,
-            trigger=CronTrigger(
-                hour='7,9,11,14,16,19,21', # Run 7 times a day during operating hours
-                minute='0',
-                jitter=1200 # Add randomness of up to 20 minutes
-            ),
+            trigger=IntervalTrigger(minutes=25),
             id='send_invitations',
-            name='Send connection invitations during operating hours.',
+            name='Send connection invitations every 25 minutes (9 AM - 10 PM).',
             replace_existing=True
         )
 

@@ -41,8 +41,20 @@ GET https://api.linkedin.com/v2/search?q=keywords&keywords=...
 - The `search_for_posts()` method now returns an empty list with a warning
 - Manual commenting via the web UI is still available
 
-**Workaround:**
-Use manual commenting through the dashboard at `http://localhost:5000/manual_comment` or `/queue` endpoints.
+**✅ Solution Implemented:**
+We've added a **Manual Comment Interface** to the dashboard that allows you to:
+1. Paste a LinkedIn post URL
+2. Optionally provide custom comment text (or let AI generate it)
+3. Submit the comment directly to that specific post
+
+**How to Use:**
+1. Navigate to the dashboard at `http://localhost:5000/`
+2. Find the "Manuel Yorum Yap" section
+3. Paste the LinkedIn post URL (e.g., `https://www.linkedin.com/feed/update/urn:li:activity:1234567890/`)
+4. Either write your own comment or leave blank for AI-generated comment
+5. Click "Yorum Gönder" to submit
+
+This workaround bypasses the need for search functionality - you simply comment on posts you've already found.
 
 ## What You Need to Do
 
@@ -92,14 +104,16 @@ If you're already using linkedinAgent:
 - Adding reactions (likes)
 - Submitting comments on specific posts
 - Turkish summary follow-ups
-- Connection invitations
 - Manual commenting via web UI
+
+### ⚠️ Requires Special Permissions:
+- **Connection invitations** - Requires the "invitations" permission which must be requested from LinkedIn. Most apps won't have this permission. The feature will fail silently if not available.
 
 ### ⚠️ Currently Unavailable:
 - Automatic post search and discovery
 - Automated commenting on discovered posts
 
-The scheduler will skip the auto-commenting job and log a message instead of throwing errors.
+The scheduler will skip these features silently without generating error messages.
 
 ## Error Messages Explained
 
@@ -110,6 +124,13 @@ The scheduler will skip the auto-commenting job and log a message instead of thr
 ### 404 Not Found on `/v2/search`
 **Before Fix:** This error occurred when trying to search for posts.  
 **After Fix:** Search functionality is disabled gracefully. No errors, just skips the operation.
+
+### 403 Forbidden on Invitations API
+**Current Behavior:** If you see "LinkedIn invitations API requires special permissions" when manually triggering invitations, this is expected. Most LinkedIn apps don't have the "invitations" permission.  
+**Solution:** 
+- When scheduled: The feature now fails silently without logging errors
+- When manually triggered: You'll see the message only once per trigger
+- To enable: Request the "invitations" permission in your LinkedIn Developer app (rarely granted)
 
 ## API Version Compatibility
 
