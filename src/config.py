@@ -16,8 +16,6 @@ class Settings(BaseSettings):
     # Gemini API - Allow both names for backward compatibility
     GEMINI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None  # Legacy support
-    GEMINI_MODEL: str = "gemini-1.5-flash"  # Primary model
-    GEMINI_FALLBACK_MODELS: str = "gemini-1.5-flash-8b,gemini-1.0-pro"  # Comma-separated fallback models
 
     # Database
     DATABASE_URL: str = "sqlite:///./linkedin_agent.db"
