@@ -27,8 +27,8 @@ def test_config():
     """Test configuration loading."""
     print("\nTesting configuration...")
     try:
-        from src.config import GEMINI_API_KEY
-        # We only check if it can be imported, not if it's set
+        from src.config import settings
+        # We only check if settings can be loaded
         print("✓ Configuration module loaded")
         return True
     except Exception as e:
@@ -67,7 +67,7 @@ def test_fastapi_app():
             '/', '/health',
             '/api/scheduled-jobs', '/api/trigger/post',
             '/api/trigger/comment', '/api/trigger/invite',
-            '/api/auth/login'
+            '/login', '/callback'
         }
         
         # Check for the main API routes
