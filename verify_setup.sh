@@ -111,6 +111,8 @@ if [ -f ".env" ]; then
     # This only reads for verification, doesn't actually execute the values
     # Regex pattern for valid environment variable names (POSIX shell compatible)
     valid_key_regex='[A-Za-z_][A-Za-z0-9_]*'
+    # Create pattern with two capture groups: (key)=(value)
+    # The parentheses are added during expansion to create proper capturing groups
     key_value_pattern="^(${valid_key_regex})=(.*)$"
     
     while IFS= read -r line; do
