@@ -238,7 +238,7 @@ async def manual_comment(request: Request):
             comment_text = custom_comment
         else:
             # Generate AI comment
-            comment_prompt = f"Write a thoughtful, engaging comment for a LinkedIn post. Keep it professional, add value, and reflect a 21-year-old product builder's perspective. Make it conversational and authentic."
+            comment_prompt = f"Write a short, engaging comment for a LinkedIn post. Write as Kürşat, a 21-year-old product builder. Match the language of the post. Be concise, authentic, and add value. Maximum 150 characters."
             comment_text = generate_text(comment_prompt)
             
             if not comment_text:

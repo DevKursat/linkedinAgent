@@ -92,10 +92,10 @@ async def trigger_post_creation_async():
         log_action("Post Creation Failed", "Could not find an article.")
         return {"success": False, "message": "Could not find an article to share"}
 
-    post_prompt = f"Write a short, engaging, witty LinkedIn post in English about this article titled '{article.title}'. Reflect a 21-year-old product builder's persona. End with the link: {article.link}"
+    post_prompt = f"Write a short, engaging LinkedIn post about this article titled '{article.title}'. Write as Kürşat, a 21-year-old product builder. Keep it concise and authentic. End with the link: {article.link}"
     post_text = generate_text(post_prompt)
 
-    summary_prompt = f"Summarize the key points of this article titled '{article.title}' in Turkish, for a follow-up comment."
+    summary_prompt = f"Write a short follow-up comment about this article titled '{article.title}'. Write as Kürşat in Turkish. Be concise and add value. Maximum 150 characters."
     summary_text = generate_text(summary_prompt)
 
     if post_text is None or summary_text is None:
@@ -199,7 +199,7 @@ async def trigger_commenting_async():
             return {"success": False, "message": "Could not get user profile"}
         
         # Generate AI comment
-        comment_prompt = f"Write a thoughtful, engaging comment for a LinkedIn post about {selected_post.get('title', 'technology')}. Keep it professional, add value, and reflect a 21-year-old product builder's perspective in Turkish. Make it conversational and authentic. Keep it under 200 characters."
+        comment_prompt = f"Write a short, engaging comment for a LinkedIn post about {selected_post.get('title', 'technology')}. Write as Kürşat, a 21-year-old product builder. Match the language of the post (English, Turkish, etc.). Be concise, authentic, and add value. Maximum 150 characters."
         comment_text = generate_text(comment_prompt)
         
         if not comment_text:
