@@ -180,18 +180,23 @@ class PostDiscovery:
 class ProfileDiscovery:
     """Discovers LinkedIn profiles to invite based on interests and network growth strategy."""
     
-    def __init__(self, interests: List[str], max_daily_invites: int = 2):
+    def __init__(self, interests: List[str], max_daily_invites: int = 2, max_weekly_invites: int = 12):
         """
         Initialize profile discovery.
         
         Args:
             interests: User's interests for targeting
             max_daily_invites: Maximum invitations per day (for safety)
+            max_weekly_invites: Maximum invitations per week (LinkedIn limit)
         """
         self.interests = interests
         self.max_daily_invites = max_daily_invites
+        self.max_weekly_invites = max_weekly_invites
         self.invited_today = 0
+        self.invited_this_week = 0
         self.last_invite_date = None
+        self.week_start_date = None
+        self.weekly_limit_hit = False
     
     def reset_daily_counter(self):
         """Reset the daily invitation counter if it's a new day."""
@@ -200,15 +205,37 @@ class ProfileDiscovery:
             self.invited_today = 0
             self.last_invite_date = today
     
+    def reset_weekly_counter(self):
+        """Reset the weekly invitation counter on Mondays."""
+        today = datetime.now().date()
+        # Check if it's a new week (Monday = 0)
+        if self.week_start_date is None or today.weekday() == 0 and today > self.week_start_date:
+            self.invited_this_week = 0
+            self.week_start_date = today
+            self.weekly_limit_hit = False
+            logger.info("Weekly invitation counter reset (Monday)")
+    
     def can_send_invite(self) -> bool:
-        """Check if we can send an invite today."""
+        """Check if we can send an invite today and this week."""
         self.reset_daily_counter()
+        self.reset_weekly_counter()
+        
+        # Check weekly limit first
+        if self.invited_this_week >= self.max_weekly_invites:
+            if not self.weekly_limit_hit:
+                logger.info(f"Weekly invite limit reached ({self.max_weekly_invites}). Will resume on Monday. Not pushing hard.")
+                self.weekly_limit_hit = True
+            return False
+        
+        # Check daily limit
         return self.invited_today < self.max_daily_invites
     
     def record_invite_sent(self):
         """Record that an invitation was sent."""
         self.reset_daily_counter()
+        self.reset_weekly_counter()
         self.invited_today += 1
+        self.invited_this_week += 1
     
     async def discover_profiles_safe(self) -> Optional[Dict[str, str]]:
         """

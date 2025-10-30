@@ -52,18 +52,19 @@ def find_shareable_article():
 async def find_profile_to_invite():
     """
     Find a profile to invite using safe automated discovery.
-    Returns None if no safe profile can be found or daily limit reached.
+    Returns None if no safe profile can be found or daily/weekly limit reached.
     """
     # Get user interests
     interests_str = os.getenv('INTERESTS', 'ai,llm,product,saas,startup')
     interests = [i.strip() for i in interests_str.split(',')]
     
     # Initialize profile discovery with conservative limits
-    discovery = ProfileDiscovery(interests, max_daily_invites=2)
+    # max_daily_invites=2, max_weekly_invites=12 (conservative to avoid hitting LinkedIn's weekly limit)
+    discovery = ProfileDiscovery(interests, max_daily_invites=2, max_weekly_invites=12)
     
-    # Check if we can send invites today
+    # Check if we can send invites today/this week
     if not discovery.can_send_invite():
-        log_action("Invitation Skipped", "Daily invite limit reached (safety)")
+        # Don't log if weekly limit - it will log in the ProfileDiscovery class
         return None
     
     # Attempt to discover a profile
@@ -92,10 +93,14 @@ async def trigger_post_creation_async():
         log_action("Post Creation Failed", "Could not find an article.")
         return {"success": False, "message": "Could not find an article to share"}
 
-    post_prompt = f"Write a short, engaging LinkedIn post about this article titled '{article.title}'. Write as Kürşat, a 21-year-old product builder. Keep it concise and authentic. End with the link: {article.link}"
+    post_prompt = f"""Write a LinkedIn post about this article: '{article.title}'. 
+Write as Kürşat: 21-year-old solo entrepreneur who builds massive projects alone, skilled in software, music, boxing, and design. 
+A Turkish nationalist following Atatürk's path. Be authentic and insightful. End with: {article.link}"""
     post_text = generate_text(post_prompt)
 
-    summary_prompt = f"Write a short follow-up comment about this article titled '{article.title}'. Write as Kürşat in Turkish. Be concise and add value. Maximum 150 characters."
+    summary_prompt = f"""Write a Turkish follow-up comment about '{article.title}'. 
+Write as Kürşat: solo entrepreneur, developer, musician, boxer, designer. Turkish nationalist following Atatürk. 
+Be concise and add value. Maximum 280 characters."""
     summary_text = generate_text(summary_prompt)
 
     if post_text is None or summary_text is None:
@@ -199,7 +204,9 @@ async def trigger_commenting_async():
             return {"success": False, "message": "Could not get user profile"}
         
         # Generate AI comment
-        comment_prompt = f"Write a short, engaging comment for a LinkedIn post about {selected_post.get('title', 'technology')}. Write as Kürşat, a 21-year-old product builder. Match the language of the post (English, Turkish, etc.). Be concise, authentic, and add value. Maximum 150 characters."
+        comment_prompt = f"""Write a LinkedIn comment for a post about {selected_post.get('title', 'technology')}. 
+Write as Kürşat: 21-year-old solo entrepreneur who builds massive projects alone, skilled in software, music, boxing, and design. 
+A Turkish nationalist following Atatürk's path. Match the post's language. Be authentic and add value. Maximum 280 characters."""
         comment_text = generate_text(comment_prompt)
         
         if not comment_text:
