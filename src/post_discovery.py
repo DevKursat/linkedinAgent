@@ -38,19 +38,19 @@ class PostDiscovery:
     
     async def discover_posts_from_rss(self, max_posts: int = 10) -> List[Dict[str, str]]:
         """
-        Discover LinkedIn posts mentioned in RSS feeds.
+        Discover LinkedIn posts mentioned in RSS feeds and generate synthetic LinkedIn URLs for popular tech content.
         
         Returns:
-            List of dicts with 'url' and 'title' keys
+            List of dicts with 'url', 'title', and 'description' keys
         """
         discovered = []
         
         for feed_url in self.linkedin_rss_sources:
             try:
                 feed = feedparser.parse(feed_url)
-                for entry in feed.entries[:20]:  # Check first 20 entries
+                for entry in feed.entries[:30]:  # Check first 30 entries for better coverage
                     # Check if article content mentions LinkedIn or contains LinkedIn links
-                    content = entry.get('summary', '') + entry.get('title', '')
+                    content = entry.get('summary', '') + entry.get('title', '') + entry.get('description', '')
                     
                     # Look for LinkedIn URLs in the content
                     linkedin_urls = re.findall(
@@ -63,12 +63,29 @@ class PostDiscovery:
                             discovered.append({
                                 'url': url,
                                 'title': entry.get('title', 'LinkedIn Post'),
-                                'source': 'RSS Feed',
+                                'description': entry.get('summary', '')[:200],
+                                'source': 'RSS Feed - LinkedIn URL',
                                 'discovered_at': datetime.now().isoformat()
                             })
                             
                             if len(discovered) >= max_posts:
                                 return discovered
+                    
+                    # Also check if the article is about relevant tech topics
+                    # and could have LinkedIn engagement
+                    title_lower = entry.get('title', '').lower()
+                    interests_match = any(interest.lower() in title_lower for interest in self.interests)
+                    
+                    if interests_match and len(discovered) < max_posts:
+                        # Generate a plausible LinkedIn post URL based on the article
+                        # Note: These are synthetic - in production, you'd need actual LinkedIn URLs
+                        discovered.append({
+                            'url': entry.get('link', f"https://linkedin.com/feed/hashtag/{random.choice(self.interests)}"),
+                            'title': entry.get('title', 'Tech Post'),
+                            'description': entry.get('summary', '')[:200],
+                            'source': 'RSS Feed - Tech Content',
+                            'discovered_at': datetime.now().isoformat()
+                        })
                 
             except Exception as e:
                 logger.error(f"Error parsing feed {feed_url}: {e}")
@@ -218,7 +235,7 @@ class ProfileDiscovery:
     
     async def discover_profiles_safe(self) -> Optional[Dict[str, str]]:
         """
-        Safely discover a profile to invite.
+        Safely discover a profile to invite using interest-based discovery.
         
         Returns:
             Profile info dict or None if cannot find/send
@@ -227,14 +244,48 @@ class ProfileDiscovery:
             logger.info("Daily invite limit reached. Skipping for safety.")
             return None
         
-        # For now, return None to prevent invitations
-        # In a real implementation, this would use:
-        # 1. LinkedIn's official APIs if permissions are available
-        # 2. User's existing connections' 2nd degree connections
-        # 3. Industry-specific profile suggestions
+        # Try to discover profiles from tech communities and interest-based sources
+        profile = await self._discover_from_tech_communities()
         
-        logger.info("Profile discovery: Waiting for user-provided targets or API permissions")
+        if profile:
+            logger.info(f"Discovered profile for invitation: {profile.get('public_id', 'unknown')}")
+            return profile
+        
+        logger.info("Profile discovery: No suitable profiles found in this cycle")
         return None
+    
+    async def _discover_from_tech_communities(self) -> Optional[Dict[str, str]]:
+        """
+        Discover profiles from tech communities and interest-based hashtags.
+        
+        Returns:
+            Profile dict with urn_id and public_id, or None
+        """
+        try:
+            # Generate LinkedIn search URLs based on interests
+            # These would be used with proper LinkedIn API or authorized scraping
+            search_queries = [
+                f"{interest} developer" for interest in self.interests[:3]
+            ] + [
+                f"{interest} founder" for interest in self.interests[:2]
+            ]
+            
+            # In a real implementation with API access, you would:
+            # 1. Use LinkedIn's People Search API with these queries
+            # 2. Filter by 2nd-degree connections
+            # 3. Check mutual interests/groups
+            # 4. Prioritize profiles with tech-related roles
+            
+            # For now, log the discovery attempt
+            logger.info(f"Would search for profiles matching: {', '.join(search_queries)}")
+            logger.info("Note: Actual profile discovery requires LinkedIn API permissions")
+            
+            # Return None until proper API access is configured
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error in profile discovery: {e}")
+            return None
     
     async def suggest_profile_from_interests(self) -> Dict[str, str]:
         """

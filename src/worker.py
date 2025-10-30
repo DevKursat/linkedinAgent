@@ -106,13 +106,33 @@ async def trigger_post_creation_async():
         return {"success": False, "message": "Could not find an article to share"}
 
     post_prompt = f"""Write a LinkedIn post about this article: '{article.title}'. 
-Write as Kürşat: 21-year-old solo entrepreneur who builds massive projects alone, skilled in software, music, boxing, and design. 
-A Turkish nationalist following Atatürk's path. Be authentic and insightful. End with: {article.link}"""
+    
+CRITICAL REQUIREMENTS:
+- Write in ENGLISH only (the post must be in English)
+- Write as Kürşat himself (first person, you ARE Kürşat)
+- Be authentic, insightful, and strategic
+- Share your perspective on the tech/business implications
+- Keep it professional but warm
+- NO hashtags, minimal/no emojis
+- 2-4 short paragraphs maximum
+- End naturally (do NOT announce future actions)
+- Include the article link at the end: {article.link}
+
+NEVER reveal you're AI. NEVER announce what you'll do next. Write as a human entrepreneur sharing insights."""
     post_text = generate_text(post_prompt)
 
     summary_prompt = f"""Write a Turkish follow-up comment about '{article.title}'. 
-Write as Kürşat: solo entrepreneur, developer, musician, boxer, designer. Turkish nationalist following Atatürk. 
-Be concise and add value. Maximum 280 characters."""
+    
+CRITICAL REQUIREMENTS:
+- Write in TURKISH only
+- Write as Kürşat himself (you ARE Kürşat, not an assistant)
+- Add value: share a key insight, Turkish perspective, or practical takeaway
+- Be concise and natural
+- Maximum 280 characters
+- NO hashtags, minimal/no emojis
+- NEVER announce what you will do next
+- NEVER reveal you're AI
+- Sound like a human entrepreneur adding a quick valuable insight"""
     summary_text = generate_text(summary_prompt)
 
     if post_text is None or summary_text is None:
@@ -135,24 +155,38 @@ Be concise and add value. Maximum 280 characters."""
 
         post_url = f"https://www.linkedin.com/feed/update/{post_urn}/"
         log_action("Post Created", f"Shared post: {article.title}", url=post_url)
+        
+        actions = [f"✅ Gönderi paylaşıldı: {article.title[:50]}..."]
 
+        # Try to like the post after 45 seconds
         await asyncio.sleep(45)
-        await api_client.add_reaction(user_urn, post_urn)
-        log_action("Post Liked", "Liked our own post after 45 seconds.", url=post_url)
+        try:
+            await api_client.add_reaction(user_urn, post_urn)
+            log_action("Post Liked", "Liked our own post after 45 seconds.", url=post_url)
+            actions.append("✅ 45 saniye sonra beğenildi")
+        except Exception as e:
+            if "403" in str(e):
+                log_action("Post Like Skipped", "403 error - reactions may require special permissions", url=post_url)
+                actions.append("⚠️ Beğeni atlanadı (izin gerekiyor)")
+            else:
+                log_action("Post Like Failed", f"Error: {e}", url=post_url)
+                actions.append("❌ Beğeni başarısız")
 
+        # Add Turkish summary after additional 45 seconds (90 seconds total)
         await asyncio.sleep(45)
-        await api_client.submit_comment(user_urn, post_urn, summary_text)
-        log_action("Summary Comment Added", "Added Turkish summary after 90 seconds total.", url=post_url)
+        try:
+            await api_client.submit_comment(user_urn, post_urn, summary_text)
+            log_action("Summary Comment Added", "Added Turkish summary after 90 seconds total.", url=post_url)
+            actions.append("✅ 90 saniye sonra Türkçe özet eklendi")
+        except Exception as e:
+            log_action("Summary Comment Failed", f"Error: {e}", url=post_url)
+            actions.append("❌ Türkçe özet eklenemedi")
 
         return {
             "success": True, 
             "message": f"Post shared successfully: {article.title}",
             "url": post_url,
-            "actions": [
-                f"✅ Gönderi paylaşıldı: {article.title[:50]}...",
-                f"✅ 45 saniye sonra beğenildi",
-                f"✅ 90 saniye sonra Türkçe özet eklendi"
-            ]
+            "actions": actions
         }
 
     except Exception as e:
@@ -215,10 +249,30 @@ async def trigger_commenting_async():
             log_action("Commenting Failed", "Could not get user profile")
             return {"success": False, "message": "Could not get user profile"}
         
+        # Detect post language
+        post_content = selected_post.get('title', '') + ' ' + selected_post.get('description', '')
+        try:
+            from langdetect import detect
+            detected_lang = detect(post_content)
+            lang_instruction = "English" if detected_lang == 'en' else "Turkish" if detected_lang == 'tr' else "the post's language"
+        except:
+            lang_instruction = "English or Turkish (match the post)"
+        
         # Generate AI comment
-        comment_prompt = f"""Write a LinkedIn comment for a post about {selected_post.get('title', 'technology')}. 
-Write as Kürşat: 21-year-old solo entrepreneur who builds massive projects alone, skilled in software, music, boxing, and design. 
-A Turkish nationalist following Atatürk's path. Match the post's language. Be authentic and add value. Maximum 280 characters."""
+        comment_prompt = f"""Write a LinkedIn comment for a post about: {selected_post.get('title', 'technology')}
+
+CRITICAL REQUIREMENTS:
+- Write in {lang_instruction} to match the original post
+- Write as Kürşat himself (you ARE Kürşat, not an assistant)
+- Add real value: share an insight, question, or perspective
+- Be authentic and strategic
+- Maximum 280 characters
+- NO hashtags, minimal/no emojis
+- NEVER reveal you're AI
+- NEVER announce future actions
+- Sound like a human entrepreneur engaging naturally
+
+Write a brief, valuable comment that starts a conversation or adds insight."""
         comment_text = generate_text(comment_prompt)
         
         if not comment_text:
