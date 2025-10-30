@@ -118,11 +118,34 @@ class LinkedInApiClient:
             return response.json()
 
     async def add_reaction(self, actor_urn: str, post_urn: str) -> None:
-        """Adds a 'LIKE' reaction to a given post."""
+        """
+        Adds a 'LIKE' reaction to a given post.
+        
+        NOTE: This endpoint may require additional permissions.
+        If you receive a 403 Forbidden error, the app may need reaction permissions
+        or the post may not be accessible.
+        
+        Raises:
+            httpx.HTTPStatusError: If the request fails (403, 404, etc.)
+        """
         payload = {"actor": f"urn:li:person:{actor_urn}", "reaction": "LIKE", "object": post_urn}
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.API_BASE_URL}/reactions", headers=self.headers, json=payload)
-            response.raise_for_status()
+            try:
+                response = await client.post(f"{self.API_BASE_URL}/reactions", headers=self.headers, json=payload)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 403:
+                    # Log but don't crash - reactions may require special permissions
+                    import logging
+                    logging.warning(
+                        f"403 Forbidden when adding reaction. This may be expected if the LinkedIn app "
+                        f"doesn't have reaction permissions or the post is not accessible. "
+                        f"Post URN: {post_urn}"
+                    )
+                    # Re-raise so caller can handle
+                    raise
+                else:
+                    raise
 
     async def submit_comment(self, actor_urn: str, post_urn: str, text: str) -> Dict[str, Any]:
         """Submits a comment on a given post."""
