@@ -109,8 +109,10 @@ if [ -f ".env" ]; then
     
     # Read .env file safely - load values without executing
     # This only reads for verification, doesn't actually execute the values
-    # Pattern for valid environment variable names
-    valid_key_pattern='^[A-Za-z_][A-Za-z0-9_]*$'
+    # Pattern components for valid environment variable names
+    key_char_class='[A-Za-z_][A-Za-z0-9_]*'
+    key_value_pattern="^(${key_char_class})=(.*)$"
+    key_validation_pattern="^${key_char_class}$"
     
     while IFS= read -r line; do
         # Skip comments and empty lines
@@ -118,12 +120,12 @@ if [ -f ".env" ]; then
         [[ -z "$line" ]] && continue
         
         # Extract key and value, handling spaces in values
-        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+        if [[ "$line" =~ $key_value_pattern ]]; then
             key="${BASH_REMATCH[1]}"
             value="${BASH_REMATCH[2]}"
             
-            # Validate key contains only safe characters
-            if [[ "$key" =~ $valid_key_pattern ]]; then
+            # Validate key contains only safe characters (redundant but explicit)
+            if [[ "$key" =~ $key_validation_pattern ]]; then
                 # Export without evaluating value (safe)
                 export "$key=$value"
             fi
