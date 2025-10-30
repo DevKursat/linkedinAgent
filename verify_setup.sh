@@ -108,12 +108,23 @@ if [ -f ".env" ]; then
     check ".env file exists"
     
     # Read .env file safely - load values without executing
-    while IFS='=' read -r key value; do
+    # This only reads for verification, doesn't actually execute the values
+    while IFS= read -r line; do
         # Skip comments and empty lines
-        [[ "$key" =~ ^#.*$ ]] && continue
-        [[ -z "$key" ]] && continue
-        # Export the variable
-        export "$key=$value"
+        [[ "$line" =~ ^#.*$ ]] && continue
+        [[ -z "$line" ]] && continue
+        
+        # Extract key and value, handling spaces in values
+        if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+            key="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            
+            # Validate key contains only safe characters
+            if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+                # Export without evaluating value (safe)
+                export "$key=$value"
+            fi
+        fi
     done < <(grep -v '^#' .env | grep -v '^$')
     
     # Check required variables
