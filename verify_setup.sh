@@ -107,38 +107,40 @@ echo "Checking environment configuration..."
 if [ -f ".env" ]; then
     check ".env file exists"
     
-    # Source .env file
-    set -a
-    source .env
-    set +a
+    # Read .env file safely - load values without executing
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^#.*$ ]] && continue
+        [[ -z "$key" ]] && continue
+        # Export the variable
+        export "$key=$value"
+    done < <(grep -v '^#' .env | grep -v '^$')
     
     # Check required variables
-    [ ! -z "$LINKEDIN_CLIENT_ID" ]
-    if check "LINKEDIN_CLIENT_ID is set"; then
-        if [ "$LINKEDIN_CLIENT_ID" = "" ]; then
-            warn "LINKEDIN_CLIENT_ID is empty"
-        fi
+    if [ -z "$LINKEDIN_CLIENT_ID" ]; then
+        warn "LINKEDIN_CLIENT_ID is not set or empty"
+    else
+        check "LINKEDIN_CLIENT_ID is set"
     fi
     
-    [ ! -z "$LINKEDIN_CLIENT_SECRET" ]
-    if check "LINKEDIN_CLIENT_SECRET is set"; then
-        if [ "$LINKEDIN_CLIENT_SECRET" = "" ]; then
-            warn "LINKEDIN_CLIENT_SECRET is empty"
-        fi
+    if [ -z "$LINKEDIN_CLIENT_SECRET" ]; then
+        warn "LINKEDIN_CLIENT_SECRET is not set or empty"
+    else
+        check "LINKEDIN_CLIENT_SECRET is set"
     fi
     
-    [ ! -z "$GEMINI_API_KEY" ]
-    if check "GEMINI_API_KEY is set"; then
-        if [ "$GEMINI_API_KEY" = "" ]; then
-            warn "GEMINI_API_KEY is empty"
-        fi
+    if [ -z "$GEMINI_API_KEY" ]; then
+        warn "GEMINI_API_KEY is not set or empty"
+    else
+        check "GEMINI_API_KEY is set"
     fi
     
-    [ ! -z "$FLASK_SECRET_KEY" ]
-    if check "FLASK_SECRET_KEY is set"; then
-        if [ "$FLASK_SECRET_KEY" = "change-this-in-production" ]; then
-            warn "FLASK_SECRET_KEY is still default value - change it!"
-        fi
+    if [ -z "$FLASK_SECRET_KEY" ]; then
+        warn "FLASK_SECRET_KEY is not set"
+    elif [ "$FLASK_SECRET_KEY" = "change-this-in-production" ]; then
+        warn "FLASK_SECRET_KEY is still default value - change it!"
+    else
+        check "FLASK_SECRET_KEY is set"
     fi
     
     # Check optional but important variables
