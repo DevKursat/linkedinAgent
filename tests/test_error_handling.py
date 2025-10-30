@@ -62,8 +62,9 @@ async def test_post_creation_ai_failure(mock_generate, mock_article, mock_client
 
 @pytest.mark.asyncio
 @patch("src.worker.log_action")
+@patch("src.worker.find_profile_to_invite")
 @patch("src.worker.get_api_client")
-async def test_invitation_403_error(mock_get_client, mock_log):
+async def test_invitation_403_error(mock_get_client, mock_find_profile, mock_log):
     """Test that invitation handles 403 error with silent failure pattern.
     
     Verifies that 403 Forbidden errors (missing permissions) return skip_log=True
@@ -71,6 +72,12 @@ async def test_invitation_403_error(mock_get_client, mock_log):
     """
     from src.worker import trigger_invitation_async
     import httpx
+    
+    # Mock finding a profile
+    mock_find_profile.return_value = {
+        "urn_id": "test_invitee_urn",
+        "public_id": "test-person"
+    }
     
     # Setup mock client
     mock_client = MagicMock()
@@ -102,16 +109,27 @@ async def test_invitation_403_error(mock_get_client, mock_log):
 
 @pytest.mark.asyncio
 @patch("src.worker.log_action")
-async def test_commenting_returns_success(mock_log):
-    """Test that commenting returns success (not error) when API is deprecated."""
+@patch("src.worker.get_api_client")
+@patch("src.worker.PostDiscovery")
+async def test_commenting_returns_success(mock_post_discovery, mock_get_client, mock_log):
+    """Test that commenting handles no discovered posts gracefully."""
     from src.worker import trigger_commenting_async
+    
+    # Mock API client
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    
+    # Mock post discovery to return no posts
+    mock_discovery_instance = MagicMock()
+    mock_discovery_instance.discover_posts_smart = AsyncMock(return_value=[])
+    mock_post_discovery.return_value = mock_discovery_instance
     
     result = await trigger_commenting_async()
     
-    # Should return success since this is expected behavior
-    assert result["success"] is True
-    assert "deprecated" in result["message"].lower() or "unavailable" in result["message"].lower()
-    assert len(result["actions"]) > 0
+    # Should return failure with proper message when no posts found
+    assert result["success"] is False
+    assert "discover" in result["message"].lower() or "relevant" in result["message"].lower()
+    assert "actions" in result
     
-    # Verify log_action was NOT called (silent failure)
-    mock_log.assert_not_called()
+    # Verify log_action was called for skipping
+    assert mock_log.called
