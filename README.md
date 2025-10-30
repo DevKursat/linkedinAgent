@@ -452,13 +452,43 @@ On push to `main`:
 - CI runs installation tests
 - Docker image is built and pushed to GitHub Container Registry (GHCR)
 
-Run in production using GHCR image:
+### Quick Production Deployment
 
+**Automated deployment script:**
+```bash
+# Clone repository
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+
+# Run automated deployment
+./deploy.sh prod
+```
+
+**Manual deployment using GHCR image:**
 ```bash
 cp .env.example .env
-# fill secrets
+# Edit .env and fill in your credentials
+nano .env
+
+# Pull and start services
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+**Health check:**
+```bash
+./healthcheck.sh
+```
+
+📖 **For detailed deployment instructions, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)**
+
+This guide covers:
+- Complete server setup instructions
+- Cloud deployment (AWS, GCP, DigitalOcean)
+- Security best practices
+- Monitoring and maintenance
+- Troubleshooting common issues
+- Performance optimization
 
 ## Contributing
 
