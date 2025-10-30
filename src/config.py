@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./linkedin_agent.db"
 
     # LinkedIn OAuth 2.0 Credentials
-    LINKEDIN_CLIENT_ID: str = ""
-    LINKEDIN_CLIENT_SECRET: str = ""
-    LINKEDIN_REDIRECT_URI: str = "http://127.0.0.1:8000/callback"
+    LINKEDIN_CLIENT_ID: str
+    LINKEDIN_CLIENT_SECRET: str
+    LINKEDIN_REDIRECT_URI: str
     
     # Operating Hours Configuration
     OPERATING_HOURS_START: int = 7  # 7 AM
