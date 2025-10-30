@@ -109,6 +109,9 @@ if [ -f ".env" ]; then
     
     # Read .env file safely - load values without executing
     # This only reads for verification, doesn't actually execute the values
+    # Pattern for valid environment variable names
+    valid_key_pattern='^[A-Za-z_][A-Za-z0-9_]*$'
+    
     while IFS= read -r line; do
         # Skip comments and empty lines
         [[ "$line" =~ ^#.*$ ]] && continue
@@ -120,12 +123,12 @@ if [ -f ".env" ]; then
             value="${BASH_REMATCH[2]}"
             
             # Validate key contains only safe characters
-            if [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            if [[ "$key" =~ $valid_key_pattern ]]; then
                 # Export without evaluating value (safe)
                 export "$key=$value"
             fi
         fi
-    done < <(grep -v '^#' .env | grep -v '^$')
+    done < .env
     
     # Check required variables
     if [ -z "$LINKEDIN_CLIENT_ID" ]; then
