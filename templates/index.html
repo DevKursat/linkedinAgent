@@ -34,19 +34,22 @@
             </section>
 
             <section id="manual-controls">
-                <h2>Manuel Kontrol Paneli</h2>
+                <h2>Otomatik İşlemler</h2>
+                <p style="color: #28a745; font-size: 0.95em; margin-bottom: 15px;">
+                    🤖 <strong>Otomatik Keşif Aktif:</strong> Sistem ilgi alanlarınıza göre postları ve profilleri otomatik buluyor
+                </p>
                 <div class="controls-container">
                     <button onclick="triggerAction('/api/trigger/post')">Anlık Paylaşım Yap</button>
-                    <button onclick="triggerAction('/api/trigger/comment')">Anlık Yorum Yap</button>
-                    <button onclick="triggerAction('/api/trigger/invite')">Anlık Davet Gönder</button>
+                    <button onclick="triggerAction('/api/trigger/comment')">Otomatik Yorum Yap</button>
+                    <button onclick="triggerAction('/api/trigger/invite')">Otomatik Davet Gönder</button>
                 </div>
                 <p id="manual-action-status"></p>
             </section>
 
             <section id="manual-comment-section">
-                <h2>Manuel Yorum Yap (LinkedIn Post URL ile)</h2>
+                <h2>Manuel Yorum (İsteğe Bağlı)</h2>
                 <p style="color: #666; font-size: 0.9em;">
-                    ℹ️ LinkedIn arama API'si kaldırıldığı için, belirli bir gönderiye yorum yapmak için post URL'sini kullanın.
+                    ℹ️ Belirli bir gönderiye manuel yorum yapmak isterseniz buradan yapabilirsiniz. Otomatik yorum için yukarıdaki butonu kullanın.
                 </p>
                 <div style="margin-top: 15px;">
                     <input type="text" id="post-url-input" placeholder="LinkedIn post URL'sini buraya yapıştırın..." 

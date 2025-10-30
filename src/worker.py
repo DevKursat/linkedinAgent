@@ -3,10 +3,12 @@ import asyncio
 import feedparser
 import random
 import httpx
+import os
 from .database import SessionLocal
 from .models import ActionLog
 from .ai_core import generate_text
 from .linkedin_api_client import LinkedInApiClient
+from .post_discovery import PostDiscovery, ProfileDiscovery
 
 # --- Client Factory ---
 def get_api_client():
@@ -47,10 +49,30 @@ def find_shareable_article():
         log_action("Article Search Failed", f"Error: {e}")
         return None
 
-def find_profile_to_invite():
-    """Placeholder for a more complex profile discovery logic."""
-    # This is a placeholder and should be replaced with real logic.
-    return {"urn_id": "ACoAADf-c-4B1v2XqZ_rY_z_wX_qZ_rY_z_w", "public_id": "in/kürşatyılmaz"}
+async def find_profile_to_invite():
+    """
+    Find a profile to invite using safe automated discovery.
+    Returns None if no safe profile can be found or daily limit reached.
+    """
+    # Get user interests
+    interests_str = os.getenv('INTERESTS', 'ai,llm,product,saas,startup')
+    interests = [i.strip() for i in interests_str.split(',')]
+    
+    # Initialize profile discovery with conservative limits
+    discovery = ProfileDiscovery(interests, max_daily_invites=2)
+    
+    # Check if we can send invites today
+    if not discovery.can_send_invite():
+        log_action("Invitation Skipped", "Daily invite limit reached (safety)")
+        return None
+    
+    # Attempt to discover a profile
+    profile = await discovery.discover_profiles_safe()
+    
+    if profile:
+        discovery.record_invite_sent()
+    
+    return profile
 
 def log_system_health():
     """Logs a simple health check message."""
@@ -124,31 +146,107 @@ async def trigger_post_creation():
     return await trigger_post_creation_async()
 
 async def trigger_commenting_async():
-    """Full logic for proactive commenting."""
-    # Note: LinkedIn search API is deprecated, commenting feature is currently unavailable
-    # Skip silently - no need to log this every time since it's a known limitation
-    return {
-        "success": True,  # Changed to True since this is expected behavior, not an error
-        "message": "Commenting feature is unavailable due to LinkedIn API deprecation. Use manual commenting via the web UI instead.",
-        "actions": [
-            "ℹ️ LinkedIn arama API'si LinkedIn tarafından kaldırıldı",
-            "✅ Manuel yorum özelliği web arayüzünde mevcut",
-        ]
-    }
+    """Full logic for proactive commenting with automated post discovery."""
+    api_client = get_api_client()
+    if not api_client:
+        return {"success": False, "message": "API client initialization failed"}
+    
+    # Get user interests from environment
+    interests_str = os.getenv('INTERESTS', 'ai,llm,product,saas,startup')
+    interests = [i.strip() for i in interests_str.split(',')]
+    
+    # Initialize post discovery
+    discovery = PostDiscovery(interests)
+    
+    try:
+        # Discover relevant posts
+        discovered_posts = await discovery.discover_posts_smart(max_posts=5)
+        
+        if not discovered_posts:
+            log_action("Commenting Skipped", "No relevant posts discovered")
+            return {
+                "success": False,
+                "message": "Could not discover any relevant posts to comment on",
+                "actions": [
+                    "ℹ️ Otomatik post keşfi çalıştırıldı",
+                    "⚠️ İlgi alanlarınıza uygun post bulunamadı"
+                ]
+            }
+        
+        # Select a random post from discovered ones
+        selected_post = random.choice(discovered_posts)
+        post_url = selected_post['url']
+        
+        # Extract post URN from URL
+        import re
+        urn_match = re.search(r'urn:li:(activity|share|ugcPost):(\d+)', post_url)
+        if not urn_match:
+            activity_match = re.search(r'activity-(\d+)', post_url)
+            if activity_match:
+                post_urn = f"urn:li:activity:{activity_match.group(1)}"
+            else:
+                log_action("Commenting Failed", f"Could not extract URN from: {post_url}")
+                return {"success": False, "message": "Invalid post URL format"}
+        else:
+            post_urn = f"urn:li:{urn_match.group(1)}:{urn_match.group(2)}"
+        
+        # Get user profile
+        profile = await api_client.get_profile()
+        user_urn = profile.get("id")
+        
+        if not user_urn:
+            log_action("Commenting Failed", "Could not get user profile")
+            return {"success": False, "message": "Could not get user profile"}
+        
+        # Generate AI comment
+        comment_prompt = f"Write a thoughtful, engaging comment for a LinkedIn post about {selected_post.get('title', 'technology')}. Keep it professional, add value, and reflect a 21-year-old product builder's perspective in Turkish. Make it conversational and authentic. Keep it under 200 characters."
+        comment_text = generate_text(comment_prompt)
+        
+        if not comment_text:
+            log_action("Commenting Failed", "AI comment generation failed")
+            return {"success": False, "message": "Could not generate comment text"}
+        
+        # Submit comment
+        await api_client.submit_comment(user_urn, post_urn, comment_text)
+        
+        # Log success
+        log_action("Auto Comment Added", f"Commented on: {selected_post.get('title', 'post')}", url=post_url)
+        
+        return {
+            "success": True,
+            "message": "Comment posted successfully via automated discovery!",
+            "url": post_url,
+            "actions": [
+                "✅ Otomatik post keşfi yapıldı",
+                f"📝 Yorum: {comment_text[:100]}...",
+                f"🔗 Post: {selected_post.get('title', 'LinkedIn Post')}"
+            ]
+        }
+        
+    except Exception as e:
+        log_action("Commenting Failed", f"Error: {str(e)}")
+        return {"success": False, "message": f"Error: {str(e)}"}
 
 async def trigger_commenting():
     return await trigger_commenting_async()
 
 async def trigger_invitation_async():
-    """Full logic for sending a connection invitation."""
+    """Full logic for sending a connection invitation with safe automated discovery."""
     api_client = get_api_client()
     if not api_client: 
         return {"success": False, "message": "API client initialization failed"}
 
-    profile_to_invite = find_profile_to_invite()
+    profile_to_invite = await find_profile_to_invite()
     if not profile_to_invite:
-        # Don't log - this is expected when no profiles are found
-        return {"success": False, "message": "Could not find a profile to invite"}
+        # Don't log - this is expected when no profiles are found or daily limit reached
+        return {
+            "success": False, 
+            "message": "Could not find a safe profile to invite today",
+            "actions": [
+                "ℹ️ Otomatik profil keşfi aktif",
+                "⚠️ Güvenli davet limiti veya uygun profil yok"
+            ]
+        }
 
     try:
         profile = await api_client.get_profile()
