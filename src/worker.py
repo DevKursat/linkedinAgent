@@ -52,19 +52,31 @@ def find_shareable_article():
 async def find_profile_to_invite():
     """
     Find a profile to invite using safe automated discovery.
-    Returns None if no safe profile can be found or daily/weekly limit reached.
+    Returns None if no safe profile can be found or daily limit reached.
+    Runs every 25 minutes during operating hours (9 AM - 10 PM).
     """
+    from datetime import datetime
+    import pytz
+    
+    # Check if within operating hours (9 AM - 10 PM Istanbul time)
+    istanbul_tz = pytz.timezone('Europe/Istanbul')
+    current_time = datetime.now(istanbul_tz)
+    current_hour = current_time.hour
+    
+    # Skip if outside operating hours
+    if current_hour < 9 or current_hour >= 22:
+        return None
+    
     # Get user interests
     interests_str = os.getenv('INTERESTS', 'ai,llm,product,saas,startup')
     interests = [i.strip() for i in interests_str.split(',')]
     
-    # Initialize profile discovery with conservative limits
-    # max_daily_invites=2, max_weekly_invites=12 (conservative to avoid hitting LinkedIn's weekly limit)
-    discovery = ProfileDiscovery(interests, max_daily_invites=2, max_weekly_invites=12)
+    # Initialize profile discovery with new limits
+    # max_daily_invites=35 (approximately one every 25 minutes from 9 AM to 10 PM)
+    discovery = ProfileDiscovery(interests, max_daily_invites=35)
     
-    # Check if we can send invites today/this week
+    # Check if we can send invites today
     if not discovery.can_send_invite():
-        # Don't log if weekly limit - it will log in the ProfileDiscovery class
         return None
     
     # Attempt to discover a profile
