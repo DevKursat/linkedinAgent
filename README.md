@@ -161,18 +161,13 @@ The agent runs **autonomously from 7 AM to 10 PM** (Istanbul time) and handles t
    - Automatically likes the post after **45 seconds**
    - Adds Turkish summary with source after **90 seconds** total
 
-2. **Auto-comment on Popular Posts** ✅ **Fully Automated**
-   - 🤖 **NEW: Automated Post Discovery** - System finds relevant posts based on your interests
-   - Uses RSS feeds, web scraping, and hashtag analysis to discover content
-   - AI generates contextual comments in Turkish
-   - Safe rate limiting to protect your account
-   - Optional manual override: Paste specific URLs if desired
+2. **Auto-comment on Popular Posts** ⚠️ **Currently Unavailable**
+   - ⚠️ LinkedIn has deprecated the public search API endpoint
+   - Manual commenting via the web UI is still available
+   - Use the `/manual_comment` endpoint or dashboard to comment on specific posts
 
-3. **Auto-connect Invitations** ✅ **Safe Automated Discovery**
-   - 🛡️ **Safety First**: Maximum 2 invitations per day
-   - Discovers profiles based on your interests and industry
-   - Smart targeting to avoid spam detection
-   - Respects LinkedIn's rate limits and best practices
+3. **Auto-connect Invitations**
+   - Identifies potential connections based on engagement
    - Sends personalized connection requests
    - Builds your network strategically
 
