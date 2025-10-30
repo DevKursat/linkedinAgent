@@ -3,6 +3,7 @@ version: '3.8'
 services:
   worker:
     image: ghcr.io/devkursat/linkedinagent:main
+    command: ["python", "-m", "src.worker"]
     env_file: .env
     volumes:
       - ./data:/app/data
@@ -10,6 +11,7 @@ services:
 
   web:
     image: ghcr.io/devkursat/linkedinagent:main
+    command: ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:5000", "src.main:app"]
     ports:
       - "5000:5000"
     env_file: .env

@@ -1,5 +1,7 @@
 # LinkedIn Agent
 
+[![CI](https://github.com/DevKursat/linkedinAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/DevKursat/linkedinAgent/actions/workflows/ci.yml)
+
 A production-ready LinkedIn bot that posts tech news with a strategic persona, manages comments, and handles proactive engagement.
 
 ## ✅ NO MORE ERRORS! / ARTIK HATA YOK!
@@ -33,6 +35,14 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 
 ## Quick Start with Docker
 
+> 💡 **New Deployment Tools:**
+> - 🚀 [`verify_setup.sh`](verify_setup.sh) - Verify your environment before deploying
+> - 🔧 [`deploy.sh`](deploy.sh) - Automated one-command deployment
+> - 🏥 [`healthcheck.sh`](healthcheck.sh) - Monitor system health
+> - 📖 [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) - Complete production deployment guide (English)
+> - 📖 [`KURULUM_REHBERI.md`](KURULUM_REHBERI.md) - Tam kurulum rehberi (Türkçe)
+> - 🛠️ [`CI_CD_TROUBLESHOOTING.md`](CI_CD_TROUBLESHOOTING.md) - Fix GitHub Actions issues
+
 > 💡 **Want simple copy-paste commands?** Check out:
 > - [`HIZLI_BASLAT.txt`](HIZLI_BASLAT.txt) - Quick command list in Turkish
 > - [`BASLATMA_KOMUTLARI.md`](BASLATMA_KOMUTLARI.md) - Detailed Turkish guide with all commands
@@ -46,6 +56,29 @@ A production-ready LinkedIn bot that posts tech news with a strategic persona, m
 ### Setup
 
 #### Automated Setup (Easiest) ⚡
+
+**Verify setup first:**
+```bash
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+./verify_setup.sh  # Check if everything is ready
+```
+
+**Deploy automatically:**
+```bash
+# For development
+./deploy.sh
+
+# For production (uses GHCR images)
+./deploy.sh prod
+```
+
+**Check system health:**
+```bash
+./healthcheck.sh  # Monitor containers and services
+```
+
+#### Legacy Setup Methods ⚙️
 
 **Windows:**
 ```bash
@@ -452,13 +485,43 @@ On push to `main`:
 - CI runs installation tests
 - Docker image is built and pushed to GitHub Container Registry (GHCR)
 
-Run in production using GHCR image:
+### Quick Production Deployment
 
+**Automated deployment script:**
+```bash
+# Clone repository
+git clone https://github.com/DevKursat/linkedinAgent.git
+cd linkedinAgent
+
+# Run automated deployment
+./deploy.sh prod
+```
+
+**Manual deployment using GHCR image:**
 ```bash
 cp .env.example .env
-# fill secrets
+# Edit .env and fill in your credentials
+nano .env
+
+# Pull and start services
+docker compose -f docker-compose.prod.yml pull
 docker compose -f docker-compose.prod.yml up -d
 ```
+
+**Health check:**
+```bash
+./healthcheck.sh
+```
+
+📖 **For detailed deployment instructions, see [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)**
+
+This guide covers:
+- Complete server setup instructions
+- Cloud deployment (AWS, GCP, DigitalOcean)
+- Security best practices
+- Monitoring and maintenance
+- Troubleshooting common issues
+- Performance optimization
 
 ## Contributing
 
