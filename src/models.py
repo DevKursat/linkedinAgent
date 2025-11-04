@@ -41,3 +41,16 @@ class Token(Base):
     id = Column(Integer, primary_key=True, index=True)
     access_token = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class TranslatedPost(Base):
+    __tablename__ = "translated_posts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    original_post_url = Column(String, unique=True, index=True, nullable=False)
+    original_content = Column(String)
+    translated_content = Column(String)
+    original_author = Column(String)
+    image_url = Column(String, nullable=True)
+    status = Column(String, default="pending")  # pending, approved, posted, rejected
+    posted_at = Column(DateTime, default=datetime.datetime.utcnow)
+    our_post_url = Column(String, nullable=True)

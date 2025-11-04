@@ -125,3 +125,72 @@ section {
 .verify-link:hover {
     text-decoration: underline;
 }
+
+/* Approval Card Styles */
+#approval-section .approval-card {
+    border: 1px solid #dddfe2;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background-color: #f7f8fa;
+}
+
+#approval-section .post-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+#approval-section .original-post,
+#approval-section .translated-post {
+    background: #fff;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #e9ebee;
+}
+
+#approval-section h3 {
+    margin-top: 0;
+    font-size: 16px;
+    color: #1c1e21;
+    border-bottom: 1px solid #dddfe2;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+#approval-section p {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #4b4f56;
+}
+
+#approval-section .approval-actions {
+    text-align: right;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+#approval-section .approval-actions button {
+    background-color: #1877f2;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+#approval-section .approval-actions button:hover {
+    background-color: #166fe5;
+}
+
+#approval-section .approval-actions button.reject {
+    background-color: #fa383e;
+}
+
+#approval-section .approval-actions button.reject:hover {
+    background-color: #e32b31;
+}
