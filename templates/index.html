@@ -46,6 +46,47 @@
                 <p id="manual-action-status"></p>
             </section>
 
+            <section id="translate-post-section">
+                <h2>Çevir ve Paylaş</h2>
+                <p style="color: #666; font-size: 0.9em;">
+                    ℹ️ Çevirip paylaşmak istediğiniz LinkedIn gönderisinin URL'sini aşağıya yapıştırın.
+                </p>
+                <div style="margin-top: 15px;">
+                    <input type="text" id="translate-url-input" placeholder="LinkedIn post URL'sini buraya yapıştırın..."
+                           style="width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                    <button onclick="submitForTranslation()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Çeviri İçin Gönder
+                    </button>
+                </div>
+                <p id="translate-status" style="margin-top: 10px;"></p>
+            </section>
+
+            <section id="approval-section">
+                <h2>Onay Bekleyen Çeviriler</h2>
+                {% if pending_posts %}
+                    {% for post in pending_posts %}
+                    <div class="approval-card">
+                        <div class="post-content">
+                            <div class="original-post">
+                                <h3>Orijinal Gönderi</h3>
+                                <p>{{ post.original_content }}</p>
+                            </div>
+                            <div class="translated-post">
+                                <h3>Çevrilen Gönderi</h3>
+                                <p>{{ post.translated_content }}</p>
+                            </div>
+                        </div>
+                        <div class="approval-actions">
+                            <button onclick="approvePost({{ post.id }})">Onayla ve Paylaş</button>
+                            <button onclick="rejectPost({{ post.id }})" class="reject">Reddet</button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p>Onay bekleyen çeviri bulunmuyor.</p>
+                {% endif %}
+            </section>
+
             <section id="manual-comment-section">
                 <h2>Manuel Yorum (İsteğe Bağlı)</h2>
                 <p style="color: #666; font-size: 0.9em;">
@@ -230,6 +271,74 @@
             fetchScheduledJobs();
             setInterval(fetchScheduledJobs, 10000); // Refresh every 10 seconds
         });
+
+        async function submitForTranslation() {
+            const postUrl = document.getElementById('translate-url-input').value.trim();
+            const statusElement = document.getElementById('translate-status');
+
+            if (!postUrl) {
+                statusElement.innerHTML = '<p style="color: red;">❌ Lütfen çevrilecek gönderinin URL\'sini girin.</p>';
+                return;
+            }
+
+            statusElement.innerHTML = '<p style="color: #1877f2;">Gönderi alınıyor ve çeviri için hazırlanıyor...</p>';
+
+            try {
+                const response = await fetch('/api/translate-post', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        post_url: postUrl
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusElement.innerHTML = `<p style="color: green;"><strong>✅ ${result.message}</strong> Onay için ana sayfayı yenileyin.</p>`;
+                    // Clear input
+                    document.getElementById('translate-url-input').value = '';
+                    // Refresh the page to show the pending post
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    statusElement.innerHTML = `<p style="color: red;">❌ ${result.message || 'Çeviri isteği başarısız oldu.'}</p>`;
+                }
+            } catch (error) {
+                console.error('Error submitting for translation:', error);
+                statusElement.innerHTML = '<p style="color: red;">❌ İstek sırasında bir hata oluştu.</p>';
+            }
+        }
+
+        async function approvePost(postId) {
+            await handleApprovalAction(postId, 'approve');
+        }
+
+        async function rejectPost(postId) {
+            await handleApprovalAction(postId, 'reject');
+        }
+
+        async function handleApprovalAction(postId, action) {
+            const statusElement = document.getElementById('approval-section'); // A general status area
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/${action}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    // Refresh to show the updated list
+                    location.reload();
+                } else {
+                    alert(`İşlem başarısız: ${result.message}`);
+                }
+            } catch (error) {
+                console.error(`Error during ${action}:`, error);
+                alert('Bir hata oluştu.');
+            }
+        }
     </script>
 </body>
 </html>

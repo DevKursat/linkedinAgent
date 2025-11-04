@@ -99,23 +99,87 @@ class LinkedInApiClient:
         )
         return []
 
-    async def share_post(self, author_urn: str, text: str) -> Dict[str, Any]:
-        """Shares a text post to the authenticated user's feed."""
+    async def share_post(self, author_urn: str, text: str, image_url: Optional[str] = None) -> Dict[str, Any]:
+        """Shares a post to the authenticated user's feed, with an optional image."""
+        share_content = {
+            "shareCommentary": {"text": text},
+            "shareMediaCategory": "NONE"
+        }
+
+        if image_url:
+            share_content["shareMediaCategory"] = "IMAGE"
+            share_content["media"] = [
+                {
+                    "status": "READY",
+                    "media": image_url, # LinkedIn can fetch the image from a public URL
+                    "title": {"text": "Image from translated post"}
+                }
+            ]
+
         payload = {
             "author": f"urn:li:person:{author_urn}",
             "lifecycleState": "PUBLISHED",
-            "specificContent": {
-                "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary": {"text": text},
-                    "shareMediaCategory": "NONE"
-                }
-            },
+            "specificContent": {"com.linkedin.ugc.ShareContent": share_content},
             "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
         }
         async with httpx.AsyncClient() as client:
             response = await client.post(f"{self.API_BASE_URL}/ugcPosts", headers=self.headers, json=payload)
             response.raise_for_status()
             return response.json()
+
+    async def get_profile_by_urn(self, person_urn: str) -> Dict[str, Any]:
+        """
+        Fetches a LinkedIn profile by its URN. Requires the 'r_liteprofile' permission.
+        """
+        import urllib.parse
+        encoded_urn = urllib.parse.quote(person_urn)
+        projection = "localizedFirstName,localizedLastName"
+        url = f"{self.API_BASE_URL}/people/{encoded_urn}?projection=({projection})"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response.json()
+
+    async def get_post_details(self, post_urn: str) -> Dict[str, Any]:
+        """
+        Fetches the details of a specific UGC post, including author name and image URL.
+        """
+        import urllib.parse
+        encoded_urn = urllib.parse.quote(post_urn)
+        url = f"{self.API_BASE_URL}/ugcPosts/{encoded_urn}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, headers=self.headers)
+            response.raise_for_status()
+            post_data = response.json()
+
+        content = post_data.get("specificContent", {}).get("com.linkedin.ugc.ShareContent", {}).get("shareCommentary", {}).get("text")
+        author_urn = post_data.get("author")
+
+        image_url = None
+        media_list = post_data.get("specificContent", {}).get("com.linkedin.ugc.ShareContent", {}).get("media", [])
+        if media_list:
+            media_item = media_list[0]
+            if 'thumbnails' in media_item and media_item['thumbnails']:
+                image_url = media_item['thumbnails'][-1].get('url')
+
+        author_name = "Unknown"
+        if author_urn:
+            try:
+                profile_data = await self.get_profile_by_urn(author_urn)
+                first_name = profile_data.get('localizedFirstName', '')
+                last_name = profile_data.get('localizedLastName', '')
+                author_name = f"{first_name} {last_name}".strip()
+            except Exception as e:
+                import logging
+                logging.warning(f"Could not fetch author profile for {author_urn}: {e}")
+
+        return {
+            "original_content": content,
+            "original_author": author_name or "Unknown",
+            "image_url": image_url
+        }
 
     async def add_reaction(self, actor_urn: str, post_urn: str) -> None:
         """
