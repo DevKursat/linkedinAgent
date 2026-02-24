@@ -268,12 +268,21 @@ class ProfileDiscovery:
             targets_raw = os.getenv("AUTO_INVITE_TARGETS", "").strip()
             if targets_raw:
                 candidates = []
+                # Valid entry rules:
+                # - Must be "URN|public_id" format
+                # - URN must be a LinkedIn person URN (urn:li:person:...)
+                # - Both URN and public_id must be non-empty
                 for item in targets_raw.split(","):
                     token = item.strip()
                     if not token:
                         continue
                     parts = [p.strip() for p in token.split("|", 1)]
-                    if len(parts) == 2 and parts[0] and parts[1]:
+                    if (
+                        len(parts) == 2
+                        and parts[0]
+                        and parts[1]
+                        and parts[0].startswith("urn:li:person:")
+                    ):
                         candidates.append({"urn_id": parts[0], "public_id": parts[1]})
 
                 if candidates:
