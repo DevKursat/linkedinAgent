@@ -38,6 +38,29 @@ def log_action(action_type: str, details: str, url: str = None):
     finally:
         db.close()
 
+def build_invitation_message(profile_to_invite: dict) -> str:
+    """Build a concise, personalized invitation message."""
+    raw_public_id = (profile_to_invite.get("public_id") or "").strip()
+    first_name = ""
+    if "-" in raw_public_id:
+        candidate_name = raw_public_id.split("-")[0].strip()
+        if candidate_name.isalpha():
+            first_name = candidate_name.title()
+    interests = [i.strip() for i in os.getenv('INTERESTS', 'yapay zeka,ürün geliştirme,girişimcilik,saas,büyüme').split(',') if i.strip()]
+    focus_topic = interests[0] if interests else "yapay zeka"
+
+    if first_name:
+        msg = (
+            f"Merhaba {first_name}, {focus_topic} odağında ortak bir bakışımız olduğunu düşünüyorum. "
+            "Kısa bir tanışma ve olası işbirliği için bağlantı kurmak isterim."
+        )
+    else:
+        msg = (
+            f"Merhaba, {focus_topic} odağında ortak bir bakışımız olduğunu düşünüyorum. "
+            "Kısa bir tanışma ve olası işbirliği için bağlantı kurmak isterim."
+        )
+    return msg[:300]
+
 def find_shareable_article():
     """Finds a random article from RSS feeds."""
     try:
@@ -111,11 +134,14 @@ CRITICAL REQUIREMENTS:
 - Write in ENGLISH only (the post must be in English)
 - Write as Kürşat himself (first person, you ARE Kürşat)
 - Be authentic, insightful, and strategic
+- Start with a hook tied to a current tech/business trend from the article
 - Share your perspective on the tech/business implications
+- Include one practical takeaway the audience can apply immediately
 - Keep it professional but warm
 - NO hashtags, minimal/no emojis
 - 2-4 short paragraphs maximum
 - End naturally (do NOT announce future actions)
+- End with a conversation-starting question
 - Include the article link at the end: {article.link}
 
 NEVER reveal you're AI. NEVER announce what you'll do next. Write as a human entrepreneur sharing insights."""
@@ -130,6 +156,7 @@ CRITICAL REQUIREMENTS:
 - Be concise and natural
 - Maximum 280 characters
 - NO hashtags, minimal/no emojis
+- End with a short, natural question to increase engagement when appropriate
 - NEVER announce what you will do next
 - NEVER reveal you're AI
 - Sound like a human entrepreneur adding a quick valuable insight"""
@@ -328,7 +355,7 @@ async def trigger_invitation_async():
             return {"success": False, "message": "Could not get user profile"}
 
         invitee_urn = profile_to_invite["urn_id"]
-        invitation_message = "Merhaba, ağınızı genişletmek ve potansiyel işbirlikleri hakkında konuşmak isterim."
+        invitation_message = build_invitation_message(profile_to_invite)
 
         await api_client.send_invitation(user_urn, invitee_urn, invitation_message)
         profile_url = f"https://www.linkedin.com/in/{profile_to_invite['public_id']}/"

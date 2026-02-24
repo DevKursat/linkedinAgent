@@ -5,6 +5,7 @@ Finds relevant LinkedIn posts based on user interests without using the deprecat
 import re
 import random
 import logging
+import os
 from typing import List, Dict, Optional
 import feedparser
 from bs4 import BeautifulSoup
@@ -232,6 +233,33 @@ class ProfileDiscovery:
         """Record that an invitation was sent."""
         self.reset_daily_counter()
         self.invited_today += 1
+
+    def _get_invite_filters(self) -> tuple[List[str], List[str]]:
+        """Get title/city filters for automatic invites from environment."""
+        title_filters = [
+            item.strip().lower()
+            for item in os.getenv("INVITE_TITLE_FILTERS", "").split(",")
+            if item.strip()
+        ]
+        city_filters = [
+            item.strip().lower()
+            for item in os.getenv("INVITE_CITY_FILTERS", "").split(",")
+            if item.strip()
+        ]
+        return title_filters, city_filters
+
+    def _profile_matches_filters(self, profile: Dict[str, str]) -> bool:
+        """Check whether a discovered profile matches configured title/city filters."""
+        title_filters, city_filters = self._get_invite_filters()
+        if not title_filters and not city_filters:
+            return True
+
+        title_value = (profile.get("title") or "").lower()
+        city_value = (profile.get("city") or "").lower()
+
+        title_ok = any(f in title_value for f in title_filters) if title_filters else True
+        city_ok = any(f in city_value for f in city_filters) if city_filters else True
+        return title_ok and city_ok
     
     async def discover_profiles_safe(self) -> Optional[Dict[str, str]]:
         """
@@ -262,6 +290,39 @@ class ProfileDiscovery:
             Profile dict with urn_id and public_id, or None
         """
         try:
+            # Primary path: use explicit candidate targets for realistic automated sending
+            # Format: AUTO_INVITE_TARGETS=urn:li:person:123|john-doe,urn:li:person:456|jane-doe
+            targets_raw = os.getenv("AUTO_INVITE_TARGETS", "").strip()
+            if targets_raw:
+                candidates = []
+                # Valid entry rules:
+                # - Must be "URN|public_id" format (optionally |title|city)
+                # - URN must be a LinkedIn person URN (urn:li:person:...)
+                # - Both URN and public_id must be non-empty
+                for item in targets_raw.split(","):
+                    token = item.strip()
+                    if not token:
+                        continue
+                    parts = [p.strip() for p in token.split("|")]
+                    if (
+                        len(parts) >= 2
+                        and parts[0]
+                        and parts[1]
+                        and parts[0].startswith("urn:li:person:")
+                    ):
+                        candidate = {"urn_id": parts[0], "public_id": parts[1]}
+                        if len(parts) >= 3 and parts[2]:
+                            candidate["title"] = parts[2]
+                        if len(parts) >= 4 and parts[3]:
+                            candidate["city"] = parts[3]
+                        if self._profile_matches_filters(candidate):
+                            candidates.append(candidate)
+
+                if candidates:
+                    profile = random.choice(candidates)
+                    logger.info(f"Selected profile from AUTO_INVITE_TARGETS: {profile.get('public_id')}")
+                    return profile
+
             # Generate LinkedIn search URLs based on interests
             # These would be used with proper LinkedIn API or authorized scraping
             search_queries = [

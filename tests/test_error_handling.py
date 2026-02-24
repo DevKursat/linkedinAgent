@@ -109,6 +109,40 @@ async def test_invitation_403_error(mock_get_client, mock_find_profile, mock_log
 
 @pytest.mark.asyncio
 @patch("src.worker.log_action")
+@patch("src.worker.find_profile_to_invite")
+@patch("src.worker.get_api_client")
+async def test_invitation_message_personalized(mock_get_client, mock_find_profile, mock_log):
+    """Test invitation text uses personalized message format."""
+    from src.worker import trigger_invitation_async
+
+    mock_find_profile.return_value = {
+        "urn_id": "test_invitee_urn",
+        "public_id": "ahmet-yilmaz"
+    }
+
+    mock_client = MagicMock()
+    mock_get_client.return_value = mock_client
+    mock_client.get_profile = AsyncMock(return_value={"id": "test_urn"})
+    mock_client.send_invitation = AsyncMock(return_value={})
+
+    result = await trigger_invitation_async()
+
+    assert result["success"] is True
+    _, _, sent_message = mock_client.send_invitation.call_args.args
+    assert "Merhaba Ahmet" in sent_message
+    assert len(sent_message) <= 300
+
+
+def test_invitation_message_without_hyphen_uses_generic_greeting():
+    """Test public_id without a first-name pattern falls back to generic greeting."""
+    from src.worker import build_invitation_message
+
+    message = build_invitation_message({"public_id": "johnsmith123"})
+    assert message.startswith("Merhaba,")
+
+
+@pytest.mark.asyncio
+@patch("src.worker.log_action")
 @patch("src.worker.get_api_client")
 @patch("src.worker.PostDiscovery")
 async def test_commenting_returns_success(mock_post_discovery, mock_get_client, mock_log):
