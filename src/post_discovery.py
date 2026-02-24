@@ -5,6 +5,7 @@ Finds relevant LinkedIn posts based on user interests without using the deprecat
 import re
 import random
 import logging
+import os
 from typing import List, Dict, Optional
 import feedparser
 from bs4 import BeautifulSoup
@@ -262,6 +263,24 @@ class ProfileDiscovery:
             Profile dict with urn_id and public_id, or None
         """
         try:
+            # Primary path: use explicit candidate targets for realistic automated sending
+            # Format: AUTO_INVITE_TARGETS=urn:li:person:123|john-doe,urn:li:person:456|jane-doe
+            targets_raw = os.getenv("AUTO_INVITE_TARGETS", "").strip()
+            if targets_raw:
+                candidates = []
+                for item in targets_raw.split(","):
+                    token = item.strip()
+                    if not token:
+                        continue
+                    parts = [p.strip() for p in token.split("|", 1)]
+                    if len(parts) == 2 and parts[0] and parts[1]:
+                        candidates.append({"urn_id": parts[0], "public_id": parts[1]})
+
+                if candidates:
+                    profile = random.choice(candidates)
+                    logger.info(f"Selected profile from AUTO_INVITE_TARGETS: {profile.get('public_id')}")
+                    return profile
+
             # Generate LinkedIn search URLs based on interests
             # These would be used with proper LinkedIn API or authorized scraping
             search_queries = [
