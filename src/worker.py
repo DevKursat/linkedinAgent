@@ -41,18 +41,22 @@ def log_action(action_type: str, details: str, url: str = None):
 def build_invitation_message(profile_to_invite: dict) -> str:
     """Build a concise, personalized invitation message."""
     raw_public_id = (profile_to_invite.get("public_id") or "").strip()
-    first_name = raw_public_id.split("-")[0].strip().title() if raw_public_id else ""
-    interests = [i.strip() for i in os.getenv('INTERESTS', 'ai,llm,product,saas,startup').split(',') if i.strip()]
-    focus_topic = interests[0].upper() if interests else "ürün geliştirme"
+    first_name = ""
+    if "-" in raw_public_id:
+        candidate_name = raw_public_id.split("-")[0].strip()
+        if candidate_name.isalpha():
+            first_name = candidate_name.title()
+    interests = [i.strip() for i in os.getenv('INTERESTS', 'yapay zeka,ürün geliştirme,girişimcilik,saas,büyüme').split(',') if i.strip()]
+    focus_topic = interests[0] if interests else "yapay zeka"
 
     if first_name:
         msg = (
-            f"Merhaba {first_name}, {focus_topic} ve ürün geliştirme odağımızın kesiştiğini düşünüyorum. "
+            f"Merhaba {first_name}, {focus_topic} odağında ortak bir bakışımız olduğunu düşünüyorum. "
             "Kısa bir tanışma ve olası işbirliği için bağlantı kurmak isterim."
         )
     else:
         msg = (
-            f"Merhaba, {focus_topic} ve ürün geliştirme odağımızın kesiştiğini düşünüyorum. "
+            f"Merhaba, {focus_topic} odağında ortak bir bakışımız olduğunu düşünüyorum. "
             "Kısa bir tanışma ve olası işbirliği için bağlantı kurmak isterim."
         )
     return msg[:300]

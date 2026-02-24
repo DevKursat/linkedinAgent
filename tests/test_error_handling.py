@@ -128,9 +128,17 @@ async def test_invitation_message_personalized(mock_get_client, mock_find_profil
     result = await trigger_invitation_async()
 
     assert result["success"] is True
-    sent_message = mock_client.send_invitation.call_args.args[2]
+    _, _, sent_message = mock_client.send_invitation.call_args.args
     assert "Merhaba Ahmet" in sent_message
     assert len(sent_message) <= 300
+
+
+def test_invitation_message_without_hyphen_uses_generic_greeting():
+    """Test public_id without a first-name pattern falls back to generic greeting."""
+    from src.worker import build_invitation_message
+
+    message = build_invitation_message({"public_id": "johnsmith123"})
+    assert message.startswith("Merhaba,")
 
 
 @pytest.mark.asyncio
